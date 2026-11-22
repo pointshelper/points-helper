@@ -4,161 +4,127 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>What's next · Points Helper</title>
-<meta name="description" content="Requests and what's being worked on for Points Helper for Aeroplan.">
+<meta name="description" content="Stores and features people have asked for in Points Helper for Aeroplan, and where each one stands.">
 <link rel="icon" href="icon128.png">
 <style>
   :root {
-    --bg: #f6f5f1; --card: #fff; --ink: #1f2420; --muted: #6b7068; --line: #e4e2da;
-    --accent: #0F6E56; --accent-soft: #E1F5EE;
-    --sub: #F1EFE8; --sub-ink: #444441;
-    --plan: #E6EEF8; --plan-ink: #1D4A7A;
-    --prog: #FAEEDA; --prog-ink: #633806;
-    --next: #EEE7F7; --next-ink: #4A2F7A;
-    --done: #E1F5EE; --done-ink: #085041;
+    --bg: #f4f2ec; --card: #fff; --ink: #1d2420; --muted: #7a7f78; --soft: #8a8f88;
+    --line: #ecebe5; --dash: #e4e2da; --tile: #f1efe8; --tile-ink: #5f5e5a;
+    --brand: #0F6E56; --brand-ink: #fff; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(15,110,86,.06);
+    --d-sub: #c9c5b8; --d-plan: #5b8fd1; --d-prog: #e0a03a; --d-next: #0F6E56;
+    --chip: #E1F5EE; --chip-ink: #085041;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141714; --card: #1d211e; --ink: #ecefea; --muted: #9aa197; --line: #2c312d;
-      --accent: #4fc3a1; --accent-soft: #17352c;
-      --sub: #262925; --sub-ink: #cfd2cc;
-      --plan: #1b2a3b; --plan-ink: #a9c8ec;
-      --prog: #3a2c17; --prog-ink: #f0c98a;
-      --next: #2c2340; --next-ink: #cdb8f0;
-      --done: #17352c; --done-ink: #9be0c6;
+      --bg: #121513; --card: #1b1f1c; --ink: #eceee9; --muted: #9ba099; --soft: #8d928b;
+      --line: #2a2f2b; --dash: #343a35; --tile: #262b27; --tile-ink: #c9ccc6;
+      --brand: #0c5c48; --shadow: 0 1px 2px rgba(0,0,0,.4);
+      --d-sub: #8a877c; --d-next: #3fb58f;
+      --chip: #17352c; --chip-ink: #9be0c6;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px 48px; }
-  header { display: flex; gap: 14px; align-items: center; margin-bottom: 6px; }
-  header img { width: 40px; height: 40px; border-radius: 10px; }
-  h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
-  .lede { color: var(--muted); margin: 0 0 22px; }
-  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
-  .btn { display: inline-block; padding: 9px 14px; border-radius: 10px; text-decoration: none;
-    border: 1px solid var(--line); color: var(--ink); background: var(--card); font-weight: 500; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  @media (prefers-color-scheme: dark) { .btn.primary { color: #0d1a15; } }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
-  .shipped { margin-bottom: 28px; }
-  .shipped ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-  .shipped li { background: var(--done); color: var(--done-ink); padding: 6px 12px; border-radius: 999px; font-size: 14px; }
-  .shipped li a { color: inherit; }
-  .cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-  @media (max-width: 1000px) { .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 600px) { .cols { grid-template-columns: 1fr; } }
-  .col { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
-  .col-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
-  .col-head b { font-size: 15px; }
-  .count { color: var(--muted); font-size: 13px; }
-  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-  .item { border-top: 1px solid var(--line); padding: 10px 0; display: flex; gap: 10px; align-items: flex-start; }
-  .item:first-of-type { border-top: 0; }
-  .tag { flex: none; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 2px; white-space: nowrap; }
-  .t-sub { background: var(--sub); color: var(--sub-ink); }
-  .t-plan { background: var(--plan); color: var(--plan-ink); }
-  .t-prog { background: var(--prog); color: var(--prog-ink); }
-  .t-next { background: var(--next); color: var(--next-ink); }
-  .item a { color: inherit; text-decoration: none; }
-  .item a:hover { text-decoration: underline; }
-  .empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
-  details { margin-top: 24px; }
-  summary { cursor: pointer; color: var(--muted); }
-  details ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); }
-  footer { margin-top: 36px; color: var(--muted); font-size: 13px; }
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  a { color: inherit; }
+  .in { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  .top { background: var(--brand); color: var(--brand-ink); padding: 28px 0 68px; }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+  .brand img { width: 34px; height: 34px; border-radius: 9px; background: #fff; }
+  h1 { font-size: 34px; margin: 22px 0 6px; letter-spacing: -.02em; }
+  .top p { margin: 0; opacity: .88; font-size: 16px; }
+  .cta { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .cta a { background: #fff; color: #0F6E56; padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
+  .cta a.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.6); }
+  .cta a:hover { filter: brightness(.96); }
+
+  .shipped { margin-top: -44px; margin-bottom: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px;
+    box-shadow: var(--shadow); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  [hidden] { display: none !important; }
+  .shipped b { font-size: 14px; margin-right: 4px; }
+  .shipped .c { background: var(--chip); color: var(--chip-ink); padding: 5px 11px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; text-decoration: none; }
+  .board { margin-top: -44px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .shipped:not([hidden]) + .board { margin-top: 0; }
+  @media (max-width: 980px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .board { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+  .col { background: var(--card); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); }
+  .col h2 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .col h2 i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .col h2 .n { margin-left: auto; color: var(--soft); font-weight: 500; font-size: 13px; }
+  .col .s { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  a.card:hover { border-color: var(--d-plan); }
+  .tile { width: 26px; height: 26px; border-radius: 7px; background: var(--tile); color: var(--tile-ink);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+  .card b { font-weight: 600; font-size: 14px; display: block; }
+  .card small { display: block; color: var(--soft); font-size: 12px; }
+  .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
+  details { margin-top: 22px; color: var(--muted); }
+  summary { cursor: pointer; font-size: 14px; }
+  details ul { margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+  footer { margin: 28px 0 40px; color: var(--soft); font-size: 13px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <img src="icon128.png" alt="">
-    <h1>What's next</h1>
-  </header>
-  <p class="lede">Requests for Points Helper for Aeroplan, and where each one stands.</p>
-  <div class="actions">
-    <a class="btn primary" href="https://github.com/pointshelper/points-helper/issues/new/choose">Request a store or report a bug</a>
-    <a class="btn" href="mailto:pointshelper.support@gmail.com">Email instead</a>
+<div class="top"><div class="in">
+  <div class="brand"><img src="icon128.png" alt="">Points Helper for Aeroplan</div>
+  <h1>What's next</h1>
+  <p>Stores and features people have asked for, and where each one stands.</p>
+  <div class="cta">
+    <a href="https://github.com/pointshelper/points-helper/issues/new?template=store_request.yml">Request a store</a>
+    <a class="ghost" href="https://github.com/pointshelper/points-helper/issues/new/choose">Report a bug or idea</a>
+    <a class="ghost" href="mailto:pointshelper.support@gmail.com">Email us</a>
   </div>
+</div></div>
 
-  <section class="shipped" id="shipped" hidden>
-    <h2>Just shipped</h2>
-    <ul></ul>
-  </section>
-
-  <div class="cols">
-    <section class="col" data-col="submitted">
-      <div class="col-head"><b>Submitted</b><span class="count"></span></div>
-      <p class="hint">Not decided yet. Add a 👍 on GitHub if you want it too.</p>
-    </section>
-    <section class="col" data-col="planned">
-      <div class="col-head"><b>Planned</b><span class="count"></span></div>
-      <p class="hint">We'll do it. Not started yet.</p>
-    </section>
-    <section class="col" data-col="progress">
-      <div class="col-head"><b>In progress</b><span class="count"></span></div>
-      <p class="hint">Being built or tested now.</p>
-    </section>
-    <section class="col" data-col="next">
-      <div class="col-head"><b>Coming in next release</b><span class="count"></span></div>
-      <p class="hint">Done. Waiting for Chrome Web Store review.</p>
-    </section>
+<div class="in">
+  <div class="shipped" id="shipped" hidden><b>Just shipped</b></div>
+  <div class="board">
+    <section class="col" data-col="submitted"><h2><i style="background:var(--d-sub)"></i>Submitted<span class="n"></span></h2><div class="s">Not decided yet. Add a 👍 on GitHub if you want it too.</div></section>
+    <section class="col" data-col="planned"><h2><i style="background:var(--d-plan)"></i>Planned<span class="n"></span></h2><div class="s">We'll do it</div></section>
+    <section class="col" data-col="progress"><h2><i style="background:var(--d-prog)"></i>In progress<span class="n"></span></h2><div class="s">Being built</div></section>
+    <section class="col" data-col="next"><h2><i style="background:var(--d-next)"></i>Next release<span class="n"></span></h2><div class="s">Waiting on Chrome review</div></section>
   </div>
-
-  <details id="notplanned" hidden>
-    <summary>Not planned</summary>
-    <ul></ul>
-  </details>
-
-  <footer id="updated"></footer>
+  <details id="notplanned" hidden><summary>Not planned</summary><ul></ul></details>
+  <footer id="updated">Not affiliated with Aeroplan or Air Canada.</footer>
 </div>
 
 <script>
-const TAG = { submitted: ['Submitted', 't-sub'], planned: ['Planned', 't-plan'], progress: ['In progress', 't-prog'], next: ['Next release', 't-next'] };
-
-function el(tag, attrs = {}, text) {
+function el(tag, attrs, ...kids) {
   const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-  if (text != null) n.textContent = text;
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) n.setAttribute(k, v);
+  for (const k of kids) if (k != null) n.append(k);
   return n;
 }
 
-function titleNode(item) {
-  return item.url ? el('a', { href: item.url }, item.title) : document.createTextNode(item.title);
+function card(item) {
+  const meta = [item.kind || 'Feature', item.votes ? '👍 ' + item.votes : null].filter(Boolean).join(' · ');
+  return el(item.url ? 'a' : 'div', { class: 'card', href: item.url },
+    el('span', { class: 'tile', 'aria-hidden': 'true' }, (item.title.match(/[A-Za-z0-9]/) || ['•'])[0].toUpperCase()),
+    el('span', {}, el('b', {}, item.title), el('small', {}, meta)));
 }
 
 fetch('roadmap.json', { cache: 'no-store' })
   .then(r => r.json())
   .then(data => {
-    for (const key of Object.keys(TAG)) {
+    for (const key of ['submitted', 'planned', 'progress', 'next']) {
       const col = document.querySelector('[data-col="' + key + '"]');
       const items = data[key] || [];
-      col.querySelector('.count').textContent = items.length || '';
-      if (!items.length) col.append(el('div', { class: 'empty' }, 'Nothing here yet.'));
-      for (const item of items) {
-        const row = el('div', { class: 'item' });
-        row.append(el('span', { class: 'tag ' + TAG[key][1] }, item.kind || TAG[key][0]), el('span'));
-        row.lastChild.append(titleNode(item));
-        col.append(row);
-      }
+      col.querySelector('.n').textContent = items.length || '';
+      if (!items.length) col.append(el('div', { class: 'empty' }, 'Nothing yet'));
+      for (const item of items) col.append(card(item));
     }
     if ((data.shipped || []).length) {
       const box = document.getElementById('shipped');
       box.hidden = false;
-      for (const item of data.shipped) {
-        const li = el('li');
-        li.append('✓ ', titleNode(item));
-        box.querySelector('ul').append(li);
-      }
+      for (const item of data.shipped) box.append(el(item.url ? 'a' : 'span', { class: 'c', href: item.url }, '✓ ' + item.title));
     }
     if ((data.notPlanned || []).length) {
       const box = document.getElementById('notplanned');
       box.hidden = false;
-      for (const item of data.notPlanned) {
-        const li = el('li');
-        li.append(titleNode(item));
-        box.querySelector('ul').append(li);
-      }
+      for (const item of data.notPlanned) box.querySelector('ul').append(el('li', {}, item.url ? el('a', { href: item.url }, item.title) : item.title));
     }
     if (data.updatedAt) {
       document.getElementById('updated').textContent = 'Updated ' +
@@ -167,7 +133,7 @@ fetch('roadmap.json', { cache: 'no-store' })
     }
   })
   .catch(() => {
-    document.querySelector('.cols').replaceWith(el('p', { class: 'empty' }, 'Couldn’t load the list. Try again in a minute.'));
+    document.querySelector('.board').replaceWith(el('p', { class: 'empty' }, 'Couldn’t load the list. Try again in a minute.'));
   });
 </script>
 </body>

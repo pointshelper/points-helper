@@ -103,6 +103,25 @@ for (const issue of issues) {
   }
 }
 
+// 👍 reactions on the GitHub issue count as "me too" votes.
+async function votesFor(url) {
+  const m = url && url.match(/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/);
+  if (!m) return 0;
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'points-helper-whats-next' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.GITHUB_TOKEN;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${m[1]}/issues/${m[2]}`, { headers });
+    if (!res.ok) return 0;
+    const issue = await res.json();
+    return (issue.reactions && issue.reactions['+1']) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+for (const k of ['submitted', 'planned', 'progress', 'next']) {
+  for (const item of out[k]) item.votes = await votesFor(item.url);
+}
+
 const newest = (a, b) => (b.at || '').localeCompare(a.at || '');
 for (const k of ['submitted', 'planned', 'progress', 'next', 'shipped']) {
   out[k].sort(newest);
