@@ -43,3 +43,19 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+  # Keep the run history short: delete this workflow's finished runs older than 7 days.
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete old runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cutoff=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api -X GET --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/whats-next.yml/runs" \
+            -f status=completed -f per_page=100 -f created="<$cutoff" --jq '.workflow_runs[].id' |
+          while read -r id; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" && echo "deleted run $id" || true
+          done
