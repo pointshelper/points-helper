@@ -33,6 +33,7 @@
   .brand img { width: 34px; height: 34px; border-radius: 9px; background: #fff; }
   h1 { font-size: 34px; margin: 22px 0 6px; letter-spacing: -.02em; }
   .top p { margin: 0; opacity: .88; font-size: 16px; }
+  .top p.hint { margin-top: 6px; font-size: 14px; opacity: .78; }
   .cta { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
   .cta a { background: #fff; color: #0F6E56; padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
   .cta a.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.6); }
@@ -79,6 +80,7 @@
   <div class="brand"><img src="icon128.png" alt="">Points Helper for Aeroplan</div>
   <h1>What's next</h1>
   <p>Stores and features people have asked for, and where each one stands.</p>
+  <p class="hint">Add a 👍 on GitHub to the ones you'd use. It helps us see what people want most.</p>
   <div class="cta">
     <a href="https://github.com/pointshelper/points-helper/issues/new?template=store_request.yml">Request a store</a>
     <a class="ghost" href="https://github.com/pointshelper/points-helper/issues/new/choose">Report a bug or idea</a>
@@ -89,7 +91,7 @@
 <div class="in">
   <div class="shipped" id="shipped" hidden><b>Just shipped</b></div>
   <div class="board">
-    <section class="col" data-col="submitted"><h2><i style="background:var(--d-sub)"></i>Submitted<span class="n"></span></h2><div class="s">Not decided yet. Add a 👍 on GitHub if you want it too.</div></section>
+    <section class="col" data-col="submitted"><h2><i style="background:var(--d-sub)"></i>Submitted<span class="n"></span></h2><div class="s">Not decided yet</div></section>
     <section class="col" data-col="planned"><h2><i style="background:var(--d-plan)"></i>Planned<span class="n"></span></h2><div class="s">We'll do it</div></section>
     <section class="col" data-col="progress"><h2><i style="background:var(--d-prog)"></i>In progress<span class="n"></span></h2><div class="s">Being built</div></section>
     <section class="col" data-col="next"><h2><i style="background:var(--d-next)"></i>Next release<span class="n"></span></h2><div class="s">Waiting on Chrome review</div></section>
@@ -118,6 +120,8 @@ fetch('roadmap.json', { cache: 'no-store' })
     for (const key of ['submitted', 'planned', 'progress', 'next']) {
       const col = document.querySelector('[data-col="' + key + '"]');
       const items = data[key] || [];
+      // Submitted: most 👍 first (stable sort keeps newest first among ties). Other columns keep their order.
+      if (key === 'submitted') items.sort((a, b) => (b.votes || 0) - (a.votes || 0));
       col.querySelector('.n').textContent = items.length || '';
       if (!items.length) col.append(el('div', { class: 'empty' }, 'Nothing yet'));
       for (const item of items) col.append(card(item));
