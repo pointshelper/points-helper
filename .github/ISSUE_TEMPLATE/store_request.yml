@@ -1,0 +1,20 @@
+name: Store request
+description: An Aeroplan eStore retailer you'd like supported.
+title: "Store: "
+labels: ["store request"]
+body:
+  - type: markdown
+    attributes:
+      value: "Check the open issues first: if it's already there, add a 👍 instead."
+  - type: input
+    id: store
+    attributes:
+      label: Store
+      placeholder: e.g. Best Buy
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Anything we should know?
+      description: Optional. How often you shop there, or problems you've had earning points.

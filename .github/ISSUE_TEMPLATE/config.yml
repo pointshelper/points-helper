@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: What's next
+    url: https://pointshelper.github.io/points-helper/
+    about: See what's planned and being worked on.
+  - name: Email instead
+    url: mailto:pointshelper.support@gmail.com
+    about: No GitHub account? Send it by email.

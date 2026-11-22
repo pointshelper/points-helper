@@ -1,0 +1,31 @@
+name: Bug report
+description: Something didn't work or looked wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Issues are public: please leave out order numbers, addresses and personal details."
+  - type: dropdown
+    id: store
+    attributes:
+      label: Store
+      options: [Amazon.ca, Walmart.ca, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw.
+    validations:
+      required: true
+  - type: dropdown
+    id: points
+    attributes:
+      label: Did the points post?
+      options: ["Haven't checked", "Not yet", "Yes", "No"]
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the extension's popup (e.g. v0.1.0).
