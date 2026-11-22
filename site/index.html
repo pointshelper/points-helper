@@ -54,10 +54,8 @@
   .col h2 .n { margin-left: auto; color: var(--soft); font-weight: 500; font-size: 13px; }
   .col .s { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
   .card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
-    display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    display: block; text-decoration: none; }
   a.card:hover { border-color: var(--d-plan); }
-  .tile { width: 26px; height: 26px; border-radius: 7px; background: var(--tile); color: var(--tile-ink);
-    display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
   .card b { font-weight: 600; font-size: 14px; display: block; }
   .card small { display: block; color: var(--soft); font-size: 12px; }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
@@ -102,7 +100,6 @@ function el(tag, attrs, ...kids) {
 function card(item) {
   const meta = [item.kind || 'Feature', item.votes ? '👍 ' + item.votes : null].filter(Boolean).join(' · ');
   return el(item.url ? 'a' : 'div', { class: 'card', href: item.url },
-    el('span', { class: 'tile', 'aria-hidden': 'true' }, (item.title.match(/[A-Za-z0-9]/) || ['•'])[0].toUpperCase()),
     el('span', {}, el('b', {}, item.title), el('small', {}, meta)));
 }
 
