@@ -28,7 +28,7 @@ const QUERY = `query($team: String!, $after: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       title description createdAt completedAt canceledAt
-      state { type }
+      state { type name }
       labels { nodes { name } }
       attachments { nodes { url } }
     }
@@ -78,7 +78,7 @@ function storeField(body) {
 
 const issues = await fetchAll();
 const now = Date.now();
-const out = { updatedAt: new Date().toISOString(), submitted: [], planned: [], progress: [], shipped: [], notPlanned: [] };
+const out = { updatedAt: new Date().toISOString(), submitted: [], planned: [], progress: [], next: [], shipped: [], notPlanned: [] };
 
 for (const issue of issues) {
   const labels = issue.labels.nodes.map(l => l.name.toLowerCase());
@@ -95,13 +95,16 @@ for (const issue of issues) {
   } else if (type === 'canceled') {
     // Duplicates are canceled in Linear too; they read as noise here, so only show recent ones without a "duplicate" label.
     if (!labels.includes('duplicate') && issue.canceledAt && now - Date.parse(issue.canceledAt) < NOT_PLANNED_DAYS * DAY) out.notPlanned.push(item);
+  } else if (type === 'started' && /release/i.test(issue.state.name)) {
+    // A started status named like "Coming in next release": built, waiting on Chrome Web Store review.
+    out.next.push({ ...item, at: issue.createdAt });
   } else if (COLUMN[type]) {
     out[COLUMN[type]].push({ ...item, at: issue.createdAt });
   }
 }
 
 const newest = (a, b) => (b.at || '').localeCompare(a.at || '');
-for (const k of ['submitted', 'planned', 'progress', 'shipped']) {
+for (const k of ['submitted', 'planned', 'progress', 'next', 'shipped']) {
   out[k].sort(newest);
   for (const item of out[k]) delete item.at;
 }
@@ -109,4 +112,4 @@ for (const k of ['submitted', 'planned', 'progress', 'shipped']) {
 await mkdir('site', { recursive: true });
 await writeFile('site/roadmap.json', JSON.stringify(out, null, 2) + '\n');
 console.log(`Wrote ${issues.length} issues → submitted ${out.submitted.length}, planned ${out.planned.length}, ` +
-  `in progress ${out.progress.length}, shipped ${out.shipped.length}, not planned ${out.notPlanned.length}`);
+  `in progress ${out.progress.length}, next release ${out.next.length}, shipped ${out.shipped.length}, not planned ${out.notPlanned.length}`);
