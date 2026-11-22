@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { --ink: #111; --muted: #6b7280; --faint: #9aa0a6; --line: #eceef0; --bg: #f6f7f8; --brand: #0F6E56; }
+    * { box-sizing: border-box; }
+    body { width: 340px; margin: 0; background: var(--bg); color: var(--ink);
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    button { font: inherit; cursor: pointer; }
+
+    header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border-bottom: 1px solid var(--line); position: relative; }
+    header img { width: 28px; height: 28px; }
+    .brand { flex: 1; }
+    .brand b { display: block; font-size: 14px; font-weight: 600; }
+    .brand span { font-size: 11px; color: var(--muted); }
+    .more { border: 0; background: none; width: 30px; height: 30px; border-radius: 8px; font-size: 18px; color: var(--faint); line-height: 1; }
+    .more:hover { background: var(--bg); color: var(--ink); }
+    .menu { position: absolute; right: 10px; top: 46px; z-index: 5; background: #fff; border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 4px; min-width: 200px; }
+    .menu[hidden] { display: none; }
+    .menu button, .menu a { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px;
+      color: var(--ink); text-decoration: none; font-size: 13px; }
+    .menu button:hover, .menu a:hover { background: var(--bg); }
+    .menu .label { padding: 8px 10px 4px; font-size: 11px; color: var(--faint); }
+    .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+
+    main { padding: 12px 14px 0; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+    .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-fg); }
+    .hero { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .badge { width: 36px; height: 36px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 600; background: var(--chip-bg); color: var(--chip-fg); }
+    .hero b { display: block; font-size: 16px; font-weight: 600; }
+    .hero span { font-size: 12px; color: var(--muted); }
+    .note { margin-top: 12px; padding: 9px 10px; border-radius: 8px; background: var(--bg); font-size: 12px; color: #444; }
+    .btn { display: block; width: 100%; margin-top: 12px; padding: 9px; border-radius: 8px; border: 1px solid #d9dce0; background: #fff; color: var(--ink); font-weight: 500; }
+    .btn:hover { background: var(--bg); }
+    .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .btn.primary:hover { background: #0b5a46; }
+
+    .section { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 14px 6px; }
+    .section b { font-size: 12px; font-weight: 600; color: var(--muted); }
+    .section span { font-size: 11px; color: var(--faint); }
+    #orders { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .order { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; }
+    .tile { width: 30px; height: 30px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+    .tile.amazon { background: #fff1e0; color: #a05a00; }
+    .tile.walmart { background: #e8f0fe; color: #1a56b8; }
+    .tile.has-logo { background: #fff; border: 1px solid var(--line); }
+    .tile .logo { width: 18px; height: 18px; }
+    .order .mid { flex: 1; min-width: 0; }
+    .num { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); border: 0; background: none; padding: 0; text-align: left; }
+    .num:hover { color: var(--ink); }
+    a.num { text-decoration: underline; }
+    .order .side { text-align: right; font-size: 11px; white-space: nowrap; }
+    .order .side div:last-child { color: var(--faint); }
+    .empty { background: #fff; border: 1px dashed #d9dce0; border-radius: 10px; padding: 14px; font-size: 12px; color: var(--muted); text-align: center; }
+    .link { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 4px; }
+    .link:hover { color: var(--ink); }
+
+    .feedback { margin: 0 14px 12px; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px solid var(--line);
+      display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+    .feedback > div { flex: 1; min-width: 0; }
+    .feedback b { color: var(--ink); font-weight: 600; font-size: 12px; }
+    .feedback button { flex: none; white-space: nowrap; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--brand); background: #fff; color: var(--brand); font-weight: 500; }
+    .feedback button:hover { background: #E1F5EE; }
+    .feedback .addr { display: block; margin-top: 3px; padding: 0; border: 0; background: none; color: var(--brand);
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; cursor: copy; }
+    .feedback .addr:hover { background: none; text-decoration: underline; }
+    .feedback .addr[hidden] { display: none; }
+    footer { padding: 10px 14px; border-top: 1px solid var(--line); background: #fff; font-size: 11px; color: var(--faint); }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="">
+    <div class="brand"><b>Points Helper</b><span>For the Aeroplan eStore</span></div>
+    <button class="more" id="more" title="More" aria-label="More">⋯</button>
+    <div class="menu" id="menu" hidden></div>
+  </header>
+  <main id="current"></main>
+  <div class="section"><b>Recent orders</b><span id="count"></span></div>
+  <div id="orders"></div>
+  <div class="feedback">
+    <div><b>Beta</b> <span id="version"></span><br><span id="feedbackHint">Bugs or ideas? Let us know.</span>
+      <button class="addr" id="addr" hidden title="Copy address"></button></div>
+    <button id="feedback">Feedback</button>
+  </div>
+  <footer>Works on Amazon.ca and Walmart.ca · Not affiliated with Aeroplan</footer>
+  <script src="stores.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

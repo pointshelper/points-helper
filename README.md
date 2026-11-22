@@ -25,4 +25,8 @@ No GitHub account? Email **pointshelper.support@gmail.com** or use the Feedback 
 - It sends nothing anywhere: no accounts, no analytics, no servers.
 - It never changes links or tracking. It only reads them to tell you whether points will track.
 
+## The code
+
+The [`extension`](extension) folder has the code for the version on the Chrome Web Store (0.1.0), so you can check what it does. It's shared for transparency, not as open source: please don't copy or reuse it.
+
 Not affiliated with Aeroplan or Air Canada.
