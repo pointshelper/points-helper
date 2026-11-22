@@ -95,8 +95,8 @@ for (const issue of issues) {
   } else if (type === 'canceled') {
     // Duplicates are canceled in Linear too; they read as noise here, so only show recent ones without a "duplicate" label.
     if (!labels.includes('duplicate') && issue.canceledAt && now - Date.parse(issue.canceledAt) < NOT_PLANNED_DAYS * DAY) out.notPlanned.push(item);
-  } else if (type === 'started' && /release/i.test(issue.state.name)) {
-    // A started status named like "Coming in next release": built, waiting on Chrome Web Store review.
+  } else if (type === 'started' && /release|approved for production/i.test(issue.state.name)) {
+    // "Approved for Production" (or a status named like "Coming in next release"): built, waiting on Chrome Web Store review.
     out.next.push({ ...item, at: issue.createdAt });
   } else if (COLUMN[type]) {
     out[COLUMN[type]].push({ ...item, at: issue.createdAt });
