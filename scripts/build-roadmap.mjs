@@ -27,7 +27,7 @@ const QUERY = `query($team: String!, $after: String) {
   issues(first: 100, after: $after, filter: { team: { key: { eq: $team } } }) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      title createdAt completedAt canceledAt
+      title description createdAt completedAt canceledAt
       state { type }
       labels { nodes { name } }
       attachments { nodes { url } }
@@ -60,9 +60,20 @@ function githubUrl(issue) {
   return a ? a.url : null;
 }
 
-function kindOf(labels) {
+// The description is only read here to work out the type; it's never published.
+// GitHub only applies template labels that exist in the repo, so fall back to the template's headings.
+function kindOf(labels, body) {
   for (const name of labels) if (KIND[name]) return KIND[name];
+  if (/^#+\s*Store\s*$/m.test(body)) return 'Store';
+  if (/^#+\s*What happened\?\s*$/m.test(body)) return 'Bug';
+  if (/^#+\s*Your idea\s*$/m.test(body)) return 'Idea';
   return null;
+}
+
+// The Store field from the store request form, for when the title doesn't name the store.
+function storeField(body) {
+  const m = body.match(/^#+\s*Store\s*\n+([^\n#]+)/m);
+  return m ? m[1].trim() : '';
 }
 
 const issues = await fetchAll();
@@ -72,9 +83,11 @@ const out = { updatedAt: new Date().toISOString(), submitted: [], planned: [], p
 for (const issue of issues) {
   const labels = issue.labels.nodes.map(l => l.name.toLowerCase());
   if (labels.includes(HIDE_LABEL)) continue;
-  const kind = kindOf(labels);
+  const body = issue.description || '';
+  const kind = kindOf(labels, body);
   // The tag already says "Store", so "Store: LEGO" reads as just "LEGO".
-  const title = kind === 'Store' ? issue.title.replace(/^store:\s*/i, '') : issue.title;
+  let title = kind === 'Store' ? issue.title.replace(/^store:?\s*/i, '') : issue.title;
+  if (!title.trim()) title = storeField(body) || issue.title;
   const item = { title, url: githubUrl(issue), kind };
   const type = issue.state.type;
   if (type === 'completed') {

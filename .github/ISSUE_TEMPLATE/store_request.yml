@@ -1,11 +1,10 @@
 name: Store request
 description: An Aeroplan eStore retailer you'd like supported.
-title: "Store: "
 labels: ["store request"]
 body:
   - type: markdown
     attributes:
-      value: "Check the open issues first: if it's already there, add a 👍 instead."
+      value: "Put the store's name in the title above. Check the open issues first: if it's already there, add a 👍 instead."
   - type: input
     id: store
     attributes:
