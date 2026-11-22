@@ -59,9 +59,14 @@
   .card b { font-weight: 600; font-size: 14px; display: block; }
   .card small { display: block; color: var(--soft); font-size: 12px; }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
-  details { margin-top: 22px; color: var(--muted); }
-  summary { cursor: pointer; font-size: 14px; }
-  details ul { margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+  .notplanned { margin-top: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .notplanned h2 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .notplanned h2 i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--soft); }
+  .notplanned .s { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .notplanned .list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .notplanned .c { background: var(--tile); color: var(--tile-ink); padding: 5px 11px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; text-decoration: none; }
+  .notplanned a.c:hover { filter: brightness(.95); }
   footer { margin: 28px 0 40px; color: var(--soft); font-size: 13px; }
 </style>
 </head>
@@ -85,7 +90,7 @@
     <section class="col" data-col="progress"><h2><i style="background:var(--d-prog)"></i>In progress<span class="n"></span></h2><div class="s">Being built</div></section>
     <section class="col" data-col="next"><h2><i style="background:var(--d-next)"></i>Next release<span class="n"></span></h2><div class="s">Waiting on Chrome review</div></section>
   </div>
-  <details id="notplanned" hidden><summary>Not planned</summary><ul></ul></details>
+  <section class="notplanned" id="notplanned" hidden><h2><i></i>Not planned</h2><div class="s">Ideas we've decided against. Click one to see why.</div><div class="list"></div></section>
   <footer id="updated">Not affiliated with Aeroplan or Air Canada.</footer>
 </div>
 
@@ -121,7 +126,7 @@ fetch('roadmap.json', { cache: 'no-store' })
     if ((data.notPlanned || []).length) {
       const box = document.getElementById('notplanned');
       box.hidden = false;
-      for (const item of data.notPlanned) box.querySelector('ul').append(el('li', {}, item.url ? el('a', { href: item.url }, item.title) : item.title));
+      for (const item of data.notPlanned) box.querySelector('.list').append(el(item.url ? 'a' : 'span', { class: 'c', href: item.url }, '✕ ' + item.title));
     }
     if (data.updatedAt) {
       document.getElementById('updated').textContent = 'Updated ' +
