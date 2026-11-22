@@ -60,9 +60,13 @@
   .card small { display: block; color: var(--soft); font-size: 12px; }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
   .notplanned { margin-top: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); }
-  .notplanned h2 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
-  .notplanned h2 i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--soft); }
-  .notplanned .s { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .notplanned summary { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+  .notplanned summary::-webkit-details-marker { display: none; }
+  .notplanned summary i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--soft); }
+  .notplanned summary .n { color: var(--soft); font-weight: 500; font-size: 13px; }
+  .notplanned summary::after { content: '▸'; margin-left: auto; color: var(--soft); transition: transform .15s; }
+  .notplanned[open] summary::after { transform: rotate(90deg); }
+  .notplanned .s { color: var(--muted); font-size: 13px; margin: 6px 0 10px; }
   .notplanned .list { display: flex; flex-wrap: wrap; gap: 8px; }
   .notplanned .c { background: var(--tile); color: var(--tile-ink); padding: 5px 11px; border-radius: 999px;
     font-size: 13px; font-weight: 600; text-decoration: none; }
@@ -90,7 +94,7 @@
     <section class="col" data-col="progress"><h2><i style="background:var(--d-prog)"></i>In progress<span class="n"></span></h2><div class="s">Being built</div></section>
     <section class="col" data-col="next"><h2><i style="background:var(--d-next)"></i>Next release<span class="n"></span></h2><div class="s">Waiting on Chrome review</div></section>
   </div>
-  <section class="notplanned" id="notplanned" hidden><h2><i></i>Not planned</h2><div class="s">Ideas we've decided against. Click one to see why.</div><div class="list"></div></section>
+  <details class="notplanned" id="notplanned" hidden><summary><i></i>Not planned<span class="n"></span></summary><div class="s">Ideas we've decided against. Click one to see why.</div><div class="list"></div></details>
   <footer id="updated">Not affiliated with Aeroplan or Air Canada.</footer>
 </div>
 
@@ -126,6 +130,7 @@ fetch('roadmap.json', { cache: 'no-store' })
     if ((data.notPlanned || []).length) {
       const box = document.getElementById('notplanned');
       box.hidden = false;
+      box.querySelector('.n').textContent = data.notPlanned.length;
       for (const item of data.notPlanned) box.querySelector('.list').append(el(item.url ? 'a' : 'span', { class: 'c', href: item.url }, '✕ ' + item.title));
     }
     if (data.updatedAt) {
