@@ -55,8 +55,12 @@
   .col h2 .n { margin-left: auto; color: var(--soft); font-weight: 500; font-size: 13px; }
   .col .s { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
   .card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
-    display: block; text-decoration: none; }
+    display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .card > span:first-child { flex: 1; min-width: 0; }
   a.card:hover { border-color: var(--d-plan); }
+  .vote { flex: none; border: 1px solid var(--dash); border-radius: 999px; padding: 3px 10px;
+    font-size: 12px; color: var(--muted); white-space: nowrap; }
+  a.card:hover .vote { border-color: var(--d-plan); color: var(--ink); }
   .card b { font-weight: 600; font-size: 14px; display: block; }
   .card small { display: block; color: var(--soft); font-size: 12px; }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
@@ -108,10 +112,13 @@ function el(tag, attrs, ...kids) {
   return n;
 }
 
-function card(item) {
-  const meta = [item.kind || 'Feature', item.votes ? '👍 ' + item.votes : null].filter(Boolean).join(' · ');
+// Submitted and Planned cards get a 👍 pill ("Vote" until someone votes); the card opens the GitHub issue.
+function card(item, votable) {
+  const showPill = votable && item.url;
+  const meta = [item.kind || 'Feature', !showPill && item.votes ? '👍 ' + item.votes : null].filter(Boolean).join(' · ');
   return el(item.url ? 'a' : 'div', { class: 'card', href: item.url },
-    el('span', {}, el('b', {}, item.title), el('small', {}, meta)));
+    el('span', {}, el('b', {}, item.title), el('small', {}, meta)),
+    showPill ? el('span', { class: 'vote', title: 'Add a 👍 on GitHub' }, '👍 ' + (item.votes || 'Vote')) : null);
 }
 
 fetch('roadmap.json', { cache: 'no-store' })
@@ -124,7 +131,7 @@ fetch('roadmap.json', { cache: 'no-store' })
       if (key === 'submitted') items.sort((a, b) => (b.votes || 0) - (a.votes || 0));
       col.querySelector('.n').textContent = items.length || '';
       if (!items.length) col.append(el('div', { class: 'empty' }, 'Nothing yet'));
-      for (const item of items) col.append(card(item));
+      for (const item of items) col.append(card(item, key === 'submitted' || key === 'planned'));
     }
     if ((data.shipped || []).length) {
       const box = document.getElementById('shipped');
