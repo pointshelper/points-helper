@@ -13,6 +13,8 @@
     --brand: #0F6E56; --brand-ink: #fff; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(15,110,86,.06);
     --d-sub: #c9c5b8; --d-plan: #5b8fd1; --d-prog: #e0a03a; --d-next: #0F6E56;
     --chip: #E1F5EE; --chip-ink: #085041;
+    --k-store: #E1F5EE; --k-store-ink: #085041; --k-feature: #E6F1FB; --k-feature-ink: #0C447C;
+    --k-idea: #FAEEDA; --k-idea-ink: #633806; --k-bug: #FCEBEB; --k-bug-ink: #791F1F;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -21,6 +23,8 @@
       --brand: #0c5c48; --shadow: 0 1px 2px rgba(0,0,0,.4);
       --d-sub: #8a877c; --d-next: #3fb58f;
       --chip: #17352c; --chip-ink: #9be0c6;
+      --k-store: #17352c; --k-store-ink: #9be0c6; --k-feature: #14273d; --k-feature-ink: #a9cdf2;
+      --k-idea: #36280f; --k-idea-ink: #f0c77c; --k-bug: #3a1818; --k-bug-ink: #f2a8a8;
     }
   }
   * { box-sizing: border-box; }
@@ -60,7 +64,11 @@
   a.card:hover { border-color: var(--d-plan); }
   .votes { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .card b { font-weight: 600; font-size: 14px; display: block; }
-  .card small { display: block; color: var(--soft); font-size: 12px; }
+  .card small { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; background: var(--k-feature); color: var(--k-feature-ink); }
+  .card small.k-store { background: var(--k-store); color: var(--k-store-ink); }
+  .card small.k-idea { background: var(--k-idea); color: var(--k-idea-ink); }
+  .card small.k-bug { background: var(--k-bug); color: var(--k-bug-ink); }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
   .notplanned { margin-top: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); }
   .notplanned summary { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
@@ -112,7 +120,7 @@ function el(tag, attrs, ...kids) {
 
 function card(item) {
   return el(item.url ? 'a' : 'div', { class: 'card', href: item.url },
-    el('span', {}, el('b', {}, item.title), el('small', {}, item.kind || 'Feature')),
+    el('span', {}, el('b', {}, item.title), el('small', { class: 'k-' + (item.kind || 'Feature').toLowerCase() }, item.kind || 'Feature')),
     item.votes ? el('span', { class: 'votes' }, '👍 ' + item.votes) : null);
 }
 
