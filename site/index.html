@@ -55,8 +55,10 @@
   .col h2 .n { margin-left: auto; color: var(--soft); font-weight: 500; font-size: 13px; }
   .col .s { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
   .card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
-    display: block; text-decoration: none; }
+    display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .card > span:first-child { flex: 1; min-width: 0; }
   a.card:hover { border-color: var(--d-plan); }
+  .votes { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .card b { font-weight: 600; font-size: 14px; display: block; }
   .card small { display: block; color: var(--soft); font-size: 12px; }
   .empty { color: var(--soft); font-size: 13px; border: 1.5px dashed var(--dash); border-radius: 12px; padding: 14px; text-align: center; }
@@ -109,9 +111,9 @@ function el(tag, attrs, ...kids) {
 }
 
 function card(item) {
-  const meta = [item.kind || 'Feature', item.votes ? '👍 ' + item.votes : null].filter(Boolean).join(' · ');
   return el(item.url ? 'a' : 'div', { class: 'card', href: item.url },
-    el('span', {}, el('b', {}, item.title), el('small', {}, meta)));
+    el('span', {}, el('b', {}, item.title), el('small', {}, item.kind || 'Feature')),
+    item.votes ? el('span', { class: 'votes' }, '👍 ' + item.votes) : null);
 }
 
 fetch('roadmap.json', { cache: 'no-store' })
