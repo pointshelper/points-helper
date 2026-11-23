@@ -153,25 +153,28 @@ fetch('roadmap.json', { cache: 'no-store' })
     if ((data.shipped || []).length) {
       const box = document.getElementById('shipped');
       box.hidden = false;
-      // Items closed on the same day shipped together: one group per day, newest open, older ones folded.
+      // One group per extension version; website changes (no version) are grouped by day.
+      // Items come newest first, so groups do too. The newest is open, older ones folded.
       const groups = [];
       for (const item of data.shipped) {
         const d = item.at ? new Date(item.at) : null;
-        const key = d ? d.toLocaleDateString('en-CA') : '';
+        const key = item.version ? 'v' + item.version : 'web ' + (d ? d.toLocaleDateString('en-CA') : '');
         let g = groups.find(g => g.key === key);
-        if (!g) groups.push(g = { key, date: d, items: [] });
+        if (!g) groups.push(g = { key, version: item.version, date: d, items: [] });
         g.items.push(item);
       }
+      // Keep the newest extension release open too, even when a website change came after it.
+      const latestRelease = groups.find(g => g.version);
       groups.forEach((g, i) => {
-        const label = g.date ? g.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'Recently';
+        const day = g.date ? g.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '';
+        const label = (g.version ? 'Version ' + g.version : 'Website') + (day ? ' · ' + day : '');
         const n = g.items.length;
         // New things first, then improvements, then fixes.
         const tagOf = item => item.kind === 'Bug' ? 'Fixed' : item.kind === 'Improvement' ? 'Improved' : 'New';
         const order = { New: 0, Improved: 1, Fixed: 2 };
         g.items.sort((a, b) => order[tagOf(a)] - order[tagOf(b)]);
-        box.append(el('details', { class: 'rel', open: i === 0 ? '' : null },
-          el('summary', {}, label, el('span', {}, '· ' + n + (n === 1 ? ' change' : ' changes'))),
-          el('ul', {}, ...g.items.map(item => el('li', {},
+        box.append(el('details', { class: 'rel', open: i === 0 || g === latestRelease ? '' : null },
+          el('summary', {}, label, el('span', {}, '· ' + n + (n === 1 ? ' change' : ' changes'))),          el('ul', {}, ...g.items.map(item => el('li', {},
             el('span', { class: 'tag ' + tagOf(item).toLowerCase() }, tagOf(item)),
             el(item.url ? 'a' : 'span', { href: item.url }, item.title))))));
       });

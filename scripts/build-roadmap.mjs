@@ -91,7 +91,12 @@ for (const issue of issues) {
   const item = { title, url: githubUrl(issue), kind };
   const type = issue.state.type;
   if (type === 'completed') {
-    if (issue.completedAt && now - Date.parse(issue.completedAt) < SHIPPED_DAYS * DAY) out.shipped.push({ ...item, at: issue.completedAt });
+    // A "v0.1.1"-style label (Version group in Linear) says which extension release it shipped in;
+    // items without one are website changes.
+    const v = labels.find(name => /^v\d+(\.\d+)+$/.test(name));
+    if (issue.completedAt && now - Date.parse(issue.completedAt) < SHIPPED_DAYS * DAY) {
+      out.shipped.push({ ...item, version: v ? v.slice(1) : null, at: issue.completedAt });
+    }
   } else if (type === 'canceled') {
     // Duplicates are canceled in Linear too; they read as noise here, so only show recent ones without a "duplicate" label.
     if (!labels.includes('duplicate') && issue.canceledAt && now - Date.parse(issue.canceledAt) < NOT_PLANNED_DAYS * DAY) out.notPlanned.push(item);
