@@ -44,6 +44,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
   # Keep the run history short: delete this workflow's finished runs older than 1 day.
+  # A run that can't be deleted turns this job red (the page still deploys), so it doesn't pile up unnoticed.
   cleanup:
     runs-on: ubuntu-latest
     permissions:
@@ -54,8 +55,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cutoff=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
-          gh api -X GET --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/whats-next.yml/runs" \
-            -f status=completed -f per_page=100 -f created="<$cutoff" --jq '.workflow_runs[].id' |
-          while read -r id; do
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" && echo "deleted run $id" || true
+          ids=$(gh api -X GET --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/whats-next.yml/runs" \
+            -f status=completed -f per_page=100 -f created="<$cutoff" --jq '.workflow_runs[].id')
+          failed=0
+          for id in $ids; do
+            if out=$(gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" 2>&1); then
+              echo "deleted run $id"
+            else
+              echo "::error::Couldn't delete run $id: $out"
+              failed=$((failed + 1))
+            fi
           done
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::$failed old run(s) couldn't be deleted. Delete them by hand from the Actions tab."
+            exit 1
+          fi
