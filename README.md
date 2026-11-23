@@ -31,6 +31,6 @@ No GitHub account? Email **pointshelper.support@gmail.com** or use the Feedback 
 
 ## The code
 
-The [`extension`](extension) folder has the code for the version on the Chrome Web Store (0.1.1), so you can check what it does. It's shared for transparency, not as open source.
+The [`extension`](extension) folder has the code for the version on the Chrome Web Store (0.1.2), so you can check what it does. It's shared for transparency, not as open source.
 
 Not affiliated with Aeroplan or Air Canada.

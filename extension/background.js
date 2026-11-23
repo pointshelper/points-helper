@@ -144,6 +144,21 @@ chrome.tabs.onRemoved.addListener(tabId => tabIssues.delete(tabId));
 
 // ---- watch tabs: record activations, replacements, send user back ---------
 
+// The page you activated from may have come from an ad or another affiliate link, and its URL still
+// carries that tag. Going back to it unchanged would replace the eStore's tracking, so drop those params.
+const TRACKING_PARAMS = ['linkCode', 'linkId', 'camp', 'creative', 'ascsubtag', 'ref', 'ref_',
+  'gclid', 'gbraid', 'wbraid', 'gad_source', 'fbclid', 'msclkid', 'irclickid', 'clickref', 'hydadcr', 'mcid'];
+function cleanReturnUrl(store, href) {
+  if (!href) return null;
+  let url;
+  try { url = new URL(href); } catch (e) { return null; }
+  const drop = new Set([store.ourParam, ...store.otherParams, ...TRACKING_PARAMS]);
+  for (const name of [...url.searchParams.keys()]) {
+    if (drop.has(name) || /^(utm_|hv|ran)/i.test(name)) url.searchParams.delete(name);
+  }
+  return url.toString();
+}
+
 async function maybeReturn(tabId, store) {
   const pending = await getAll('returnTo', null);
   if (!pending || pending.store !== store.key) return;
@@ -222,7 +237,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse(await computeStatus(store, sender.tab ? sender.tab.id : msg.tabId));
       if (sender.tab) updateBadge(sender.tab.id, store);
     } else if (msg.type === 'activate' && store) {
-      await chrome.storage.local.set({ returnTo: { store: store.key, url: msg.returnTo || null, at: Date.now() } });
+      await chrome.storage.local.set({ returnTo: { store: store.key, url: cleanReturnUrl(store, msg.returnTo), at: Date.now() } });
       const opener = sender.tab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
       await chrome.tabs.create({ url: store.estoreUrl, index: opener ? opener.index + 1 : undefined });
       sendResponse({ ok: true });
