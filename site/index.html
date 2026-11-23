@@ -43,7 +43,7 @@
   .cta a.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.6); }
   .cta a:hover { filter: brightness(.96); }
 
-  .shipped { margin-top: -44px; margin-bottom: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px;
+  .shipped { margin-top: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px;
     box-shadow: var(--shadow); }
   [hidden] { display: none !important; }
   .shipped h2 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
@@ -64,7 +64,6 @@
   .tag.improved { background: var(--k-feature); color: var(--k-feature-ink); }
   .tag.fixed { background: var(--k-bug); color: var(--k-bug-ink); }
   .board { margin-top: -44px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
-  .shipped:not([hidden]) + .board { margin-top: 0; }
   @media (max-width: 980px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 560px) { .board { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
   .col { background: var(--card); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); }
@@ -114,13 +113,13 @@
 </div></div>
 
 <div class="in">
-  <section class="shipped" id="shipped" hidden><h2><i></i>Just shipped</h2></section>
   <div class="board">
     <section class="col" data-col="submitted"><h2><i style="background:var(--d-sub)"></i>Submitted<span class="n"></span></h2><div class="s">Not decided yet</div></section>
     <section class="col" data-col="planned"><h2><i style="background:var(--d-plan)"></i>Planned<span class="n"></span></h2><div class="s">We'll do it</div></section>
     <section class="col" data-col="progress"><h2><i style="background:var(--d-prog)"></i>In progress<span class="n"></span></h2><div class="s">Being built</div></section>
     <section class="col" data-col="next"><h2><i style="background:var(--d-next)"></i>Next release<span class="n"></span></h2><div class="s">Built, coming in the next update</div></section>
   </div>
+  <section class="shipped" id="shipped" hidden><h2><i></i>Just shipped</h2></section>
   <details class="notplanned" id="notplanned" hidden><summary><i></i>Not planned<span class="n"></span></summary><div class="s">Ideas we've decided against. Click one to see why.</div><div class="list"></div></details>
   <footer id="updated">Not affiliated with Aeroplan or Air Canada.</footer>
 </div>
