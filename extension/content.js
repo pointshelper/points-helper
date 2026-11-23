@@ -6,6 +6,11 @@
   // Set when you hide the pill with ×; it comes back when the status or the problem changes.
   const HIDE_KEY = 'pointsHelperHidden';
   const GREET_OPEN_KEY = 'pointsHelperGreetOpen';
+  const ACT_SHOWN_KEY = 'pointsHelperActivationShown';
+  const ACT_OPEN_KEY = 'pointsHelperActivationOpen'; // { path }: the activation card is open on this page
+  const ACT_RETURN_KEY = 'pointsHelperReturnShown'; // the return (after activating) the card already opened for
+  // Earlier versions kept the greeting open across pages with this flag; clear any leftover.
+  sessionStorage.removeItem(GREET_OPEN_KEY);
   let greetChecked = false;
   let greeting = false;
   let host = null;
@@ -399,9 +404,10 @@
   }
 
   // Which cart items won't earn, grouped by category, and what that means for the rest.
-  function cartCheckNote(cc) {
-    const n = cc.excluded.length;
-    const others = cc.total - n - (cc.unknown || 0);
+  // preCart: Amazon items added before activating, which don't earn either, so they aren't "the other items".
+  function cartCheckNote(cc, preCart = []) {
+    const notEarning = new Set([...cc.excluded.map(i => i.id), ...preCart.map(i => i.asin)]);
+    const others = cc.total - notEarning.size - (cc.unknown || 0);
     const groups = new Map();
     for (const i of cc.excluded) {
       if (!groups.has(i.label)) groups.set(i.label, []);
@@ -420,7 +426,7 @@
         )
       )),
       el('div', { class: 'more' }, others > 0
-        ? 'The other ' + others + ' item' + (others === 1 ? '' : 's') + ' earn' + (others === 1 ? 's' : '') + ' as usual.'
+        ? (others === 1 ? 'The other item earns as usual.' : 'The other ' + others + ' items earn as usual.')
         : 'Nothing in this cart earns Aeroplan points.')
     );
   }
@@ -468,6 +474,8 @@
       padding: 14px; margin-top: 8px; max-height: calc(100vh - var(--top) - 70px); overflow-y: auto; box-sizing: border-box; }
     .top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; }
     .top .where { flex: 1; }
+    .top { cursor: grab; touch-action: none; }
+    .top .x { cursor: pointer; }
     .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-fg); }
     .x { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: #9aa0a6; padding: 0 2px; }
     .x:hover { color: #111; }
@@ -562,11 +570,21 @@
       warnings.push(['', ctx.excluded]);
     }
     if (ctx.preCart.length) {
-      const names = ctx.preCart.map(i => '“' + i.title + '”').join(', ');
-      warnings.push(['bad', names + (ctx.preCart.length > 1 ? ' were' : ' was') +
-        ' in your cart before you activated and won’t earn points. Remove ' +
-        (ctx.preCart.length > 1 ? 'them' : 'it') + ' from the cart and add ' +
-        (ctx.preCart.length > 1 ? 'them' : 'it') + ' again.']);
+      // Same compact layout as the category box: a count, a few short names, then what to do.
+      const n = ctx.preCart.length;
+      const names = ctx.preCart.map(i => i.title);
+      warnings.push(['bad', el('div', { class: 'warn bad' },
+        el('div', { class: 'items' }, el('div', { class: 'group' },
+          el('div', { class: 'item' },
+            el('span', { class: 'name' }, 'Added before you activated'),
+            el('span', { class: 'cat' }, n + ' item' + (n === 1 ? '' : 's'))
+          ),
+          el('div', { class: 'names', title: names.join('\n') },
+            names.slice(0, 3).map(t => shortTitle(t, 30)).join(' · ') + (n > 3 ? ' · +' + (n - 3) + ' more' : ''))
+        )),
+        el('div', { class: 'more' }, (n === 1 ? 'It won’t earn. Remove it from the cart and add it again.'
+          : 'They won’t earn. Remove them from the cart and add them again.'))
+      )]);
     }
     // A reminder, not a problem: shown as a quiet line, not a coloured note.
     const reminder = !ctx.preCart.length && store.key === 'amazon' && ctx.page === 'cart' &&
@@ -574,7 +592,7 @@
       ? 'Only items added after you activated (' + ago(status.activatedAt) + ') earn points.' : null;
     const cc = ctx.cartCheck;
     if (cc && cc.excluded.length) {
-      warnings.push(['bad', cartCheckNote(cc)]);
+      warnings.push(['bad', cartCheckNote(cc, ctx.preCart)]);
     }
 
     const close = el('button', { class: 'x', title: 'Close', onclick: e => {
@@ -582,6 +600,7 @@
       expanded = false;
       greeting = false;
       sessionStorage.removeItem(GREET_OPEN_KEY);
+      sessionStorage.removeItem(ACT_OPEN_KEY);
       // Don't pop open again for the same problem.
       if (ctx.problemKey) sessionStorage.setItem(PROBLEM_KEY, ctx.problemKey);
       refresh(true);
@@ -592,7 +611,7 @@
       let look = LOOK[status.state] || LOOK.none;
       let sub = status.state === 'replaced' ? 'Activate again before you buy.'
         : status.activatedAt && status.state !== 'none' ? 'Activated ' + ago(status.activatedAt)
-        : 'Earn ' + store.earn + ' in Aeroplan points';
+        : 'Earn Aeroplan points on eligible items';
       // Tracking is fine but the item or cart won't earn: lead with that, not "You're earning points".
       if (active) {
         const onNote = 'Tracking is on · activated ' + ago(status.activatedAt);
@@ -611,8 +630,9 @@
         }
       }
       wrap.append(el('div', { class: 'panel', style: '--chip-bg:' + look.bg + ';--chip-fg:' + look.fg },
-        el('div', { class: 'top' },
-          el('span', { class: 'where' }, store.host[0].toUpperCase() + store.host.slice(1) + ' · ' + store.earn),
+        // The card's top row is a drag handle too: on pages with no pill (home, search) it's the only one.
+        el('div', { class: 'top', onpointerdown: e => { if (!e.target.closest('.x')) startDrag(e, wrap); } },
+          el('span', { class: 'where' }, store.host[0].toUpperCase() + store.host.slice(1)),
           close
         ),
         el('div', { class: 'hero' },
@@ -623,6 +643,10 @@
           ? el('div', { class: 'ok' }, 'You’re set. Finish buying in this session.')
           : null,
         warnings.map(([cls, text]) => text instanceof Element ? text : el('div', { class: 'warn ' + cls }, text)),
+        // Category lists change (e.g. Black Friday), so always point to the eStore's current list:
+        // an item marked as earning may have been dropped since this version was made.
+        el('div', { class: 'small' }, 'The eStore updates its eligible categories and rates from time to time. ',
+          el('a', { href: store.estoreUrl, target: '_blank', rel: 'noopener' }, 'See the current list')),
         reminder ? el('div', { class: 'small' }, reminder) : null,
         cc && cc.checking
           ? el('div', { class: 'small' }, 'Checking the categories of ' + cc.checking + ' cart item' + (cc.checking > 1 ? 's' : '') + '…')
@@ -684,6 +708,7 @@
           if (justDragged) return;
           if (expanded && ctx.problemKey) sessionStorage.setItem(PROBLEM_KEY, ctx.problemKey);
           expanded = !expanded;
+          sessionStorage.removeItem(ACT_OPEN_KEY); // you opened or closed it yourself, so it stays the way you left it
           if (!expanded) { greeting = false; sessionStorage.removeItem(GREET_OPEN_KEY); }
           refresh(true);
         }
@@ -713,7 +738,26 @@
 
   // ---- main loop -------------------------------------------------------------
 
-  async function refresh(force) {
+  // After the extension is reloaded or auto-updated, this copy of the script keeps running in open
+  // tabs but can't reach the extension any more ("Extension context invalidated"). Stop it quietly:
+  // clear the timers and remove the card; the page's next load gets the new version.
+  const timers = [];
+  let shutDown = false;
+  function stale() {
+    if (shutDown) return true;
+    if (chrome.runtime && chrome.runtime.id) return false;
+    shutDown = true;
+    timers.forEach(clearInterval);
+    if (host) host.remove();
+    return true;
+  }
+
+  function refresh(force) {
+    if (stale()) return Promise.resolve();
+    return refreshPage(force).catch(e => { if (!stale()) throw e; });
+  }
+
+  async function refreshPage(force) {
     if (!force && location.href === lastHref) return;
     lastHref = location.href;
 
@@ -728,15 +772,37 @@
     if (!status) return;
 
     // Pop the card open the first time you land on this store since Chrome started.
+    // Like the activation card, it stays on this page only and closes when you go to another one.
     if (!greetChecked) {
       greetChecked = true;
       const r = await chrome.runtime.sendMessage({ type: 'greet', storeKey: store.key }).catch(() => null);
-      if (r && r.first) sessionStorage.setItem(GREET_OPEN_KEY, '1');
+      if (r && r.first) sessionStorage.setItem(ACT_OPEN_KEY, JSON.stringify({ path: location.pathname }));
     }
-    // The greeting stays open, across pages in this tab, until you close it with ×.
-    if (sessionStorage.getItem(GREET_OPEN_KEY) && !greeting) {
-      expanded = true;
-      greeting = true;
+    // Just came back from the eStore: open the card once for this activation, so you see
+    // "You're earning points" even on pages with no pill (home, search).
+    if (status.state === 'active' && status.activatedAt && Date.now() - status.activatedAt < 2 * 60 * 1000 &&
+        sessionStorage.getItem(ACT_SHOWN_KEY) !== String(status.activatedAt)) {
+      sessionStorage.setItem(ACT_SHOWN_KEY, String(status.activatedAt));
+      sessionStorage.setItem(ACT_OPEN_KEY, JSON.stringify({ at: status.activatedAt, path: location.pathname }));
+    }
+    // The extension then sends you back to the page you started from: open it there too.
+    if (status.returnedAt && Date.now() - status.returnedAt < 30 * 1000 &&
+        location.pathname === status.returnedPath &&
+        sessionStorage.getItem(ACT_RETURN_KEY) !== String(status.returnedAt)) {
+      sessionStorage.setItem(ACT_RETURN_KEY, String(status.returnedAt));
+      sessionStorage.setItem(ACT_OPEN_KEY, JSON.stringify({ path: location.pathname }));
+    }
+    // A card that opened by itself (greeting or activation) stays open only on that page,
+    // and closes as soon as you go to another one.
+    // Compares the path, not the full URL, since stores tidy their query strings after loading.
+    const actOpen = readJSON(ACT_OPEN_KEY, null);
+    if (actOpen) {
+      if (location.pathname === actOpen.path) {
+        expanded = true;
+      } else {
+        sessionStorage.removeItem(ACT_OPEN_KEY);
+        if (!greeting) expanded = false;
+      }
     }
 
     // Other pages (home, search) only show the card while it's open.
@@ -802,6 +868,7 @@
   let lastIssue = null;
   function reportIssue(level, message) {
     lastIssue = level ? { level, message } : null;
+    if (stale()) return;
     chrome.runtime.sendMessage({ type: 'pageIssue', storeKey: store.key, level, message }).catch(() => {});
   }
 
@@ -818,18 +885,18 @@
   });
 
   // Store pages change without full reloads, so watch the URL.
-  setInterval(() => refresh(false), 1000);
+  timers.push(setInterval(() => refresh(false), 1000));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.track) refresh(true);
     // Reset clears the greeting, so this tab may greet again.
-    if (area === 'session' && changes.greeted) greetChecked = false;
+    if (area === 'session' && changes.greeted) { greetChecked = false; refresh(true); }
   });
 
   // The cart changes in place when you remove or add items; re-check it every few seconds.
-  setInterval(() => {
+  timers.push(setInterval(() => {
     if (!document.hidden && pageType(store, location.pathname) === 'cart') refresh(true);
-  }, 3000);
+  }, 3000));
 
   // Product breadcrumbs can load late; check again shortly after.
   refresh(true);

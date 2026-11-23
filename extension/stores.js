@@ -14,7 +14,6 @@ const STORES = {
     key: 'amazon',
     name: 'Amazon',
     host: 'amazon.ca',
-    earn: 'up to 1 pt/$',
     estoreUrl: ESTORE + '/affiliate-details/amazon',
     // Aeroplan's Amazon Associates tag (seen on the eStore click-through).
     ourParam: 'tag',
@@ -32,32 +31,30 @@ const STORES = {
     },
     breadcrumbs: ['#wayfinding-breadcrumbs_feature_div'],
     // Checked first: these never earn, even inside an eligible department.
+    // Collectibles only as the top department ("Collectibles & Fine Art"): toys like
+    // "Toys & Games › Collectible Figures" do earn.
     excluded: [
-      ['Automotive', /\bautomotive\b|\btires?\b/i],
-      ['Movies & music', /blu-ray|\bcds?\b|\bdvds?\b|\bvinyl\b|movies & tv|\bmusic\b/i],
-      ['Kindle eBooks & digital', /digital (books|music|video)|kindle (ebooks|store|unlimited)/i],
-      ['Collectibles', /\bcollectible/i],
-      ['Computers & tablets', /\bcomputers?\b|(?<!fire )\btablets?\b/i],
-      ['Electronic components & home audio', /electronic components|home audio|home entertainment/i],
+      ['Collectibles & fine art', /^\s*collectibles/i],
       ['Grocery', /\bgrocery\b|gourmet food/i],
-      ['Toys & games', /toys & games|\btoys\b/i],
-      ['Video games', /video games/i],
+      ['Digital music & video', /digital (music|video)|prime video/i],
       ['Gift cards', /gift cards?/i]
     ],
-    // Amazon only pays on these (eStore "eligible categories", 2026-11-11).
+    // Amazon only pays on these (eStore "eligible categories", re-checked 2026-11-22:
+    // toys, video games, automotive, movies & music and computers were added since 2026-11-11).
     // Anything else gets a "not on the list" note.
     eligible: [
       /clothing|fashion|\bshoes\b|handbags|wallets|sunglasses|jewel|watches|luggage/i,
       /\bhome\b|kitchen|dining|furniture|home improvement|\btools\b|appliances|patio|lawn|garden/i,
       /beauty|grooming|\bhealth\b|household|personal care|\bbaby\b|nursery|\bpets?\b/i,
-      /sports|fitness|outdoor|musical instruments|\bbooks\b|textbooks|handmade/i,
+      /sports|fitness|outdoor|musical instruments|\bbooks\b|textbooks|handmade|arts|crafts|sewing/i,
       /office|school|industrial|scientific|software/i,
-      /cell phones|camera|\bphoto\b/i,
-      /amazon devices|\becho\b|alexa|fire tv|fire tablets?|kindle e-readers?|\bring\b|\beero\b|cloud cam/i
+      /cell phones|camera|\bphoto\b|computers?|tablets?|electronic components|home audio|home entertainment/i,
+      /\btoys\b|\bgames\b|automotive|\btires?\b|\bwheels\b|blu-ray|\bdvds?\b|\bcds?\b|\bvinyl\b|movies/i,
+      /amazon devices|\becho\b|alexa|fire tv|fire tablets?|kindle|\bring\b|\beero\b|cloud cam/i
     ],
     orderNumber: /\b(\d{3}-\d{7}-\d{7})\b/,
     rules: [
-      'Only some categories earn: clothing, home, kitchen, sports, beauty, health, office, phones and Amazon devices, among others.',
+      'Most departments earn. Grocery, gift cards and Coach products don’t.',
       'Only items added to the cart after activating earn points.',
       'Buy within 24 hours of adding to the cart.',
       'Don’t visit other sites or use outside coupons before buying.'
@@ -68,7 +65,6 @@ const STORES = {
     key: 'walmart',
     name: 'Walmart',
     host: 'walmart.ca',
-    earn: '1 pt/$',
     estoreUrl: ESTORE + '/affiliate-details/walmart',
     // The eStore's Rakuten publisher ID (siteID / wmlspartner on the landing URL).
     ourParam: 'wmlspartner',
@@ -85,22 +81,18 @@ const STORES = {
       product: /\/ip\//
     },
     breadcrumbs: ['nav[aria-label*="breadcrumb" i]', '[data-automation*="breadcrumb" i]', '[data-testid*="breadcrumb" i]'],
+    // eStore exclusions, re-checked 2026-11-22: only Grocery, Electronics and Video Games
+    // (baby, household, personal care, health, pets and beauty were dropped since 2026-11-11).
     excluded: [
-      ['Grocery & food', /\bgrocery\b|\bfood\b|pantry|snacks|beverages/i],
+      ['Grocery & food', /\bgrocery\b|(?<!pet )\bfood\b|pantry|snacks|beverages/i],
       ['Electronics', /\belectronics\b/i],
-      ['Video games', /video games/i],
-      ['Baby', /\bbaby\b/i],
-      ['Household supplies', /household/i],
-      ['Personal care', /personal care/i],
-      ['Health', /\bhealth\b|pharmacy/i],
-      ['Pets', /\bpets?\b/i],
-      ['Beauty', /\bbeauty\b/i]
+      ['Video games', /video games/i]
     ],
     orderNumber: /order\s*(?:#|number|no\.?)\s*:?\s*([0-9][0-9-]{6,})/i,
     rules: [
       'Finish buying in the same session you started from the eStore.',
       'Don’t visit other sites, use other extensions’ coupons, or block cookies.',
-      'Grocery, electronics, baby, household, health, pets and beauty don’t earn.'
+      'Grocery, electronics and video games don’t earn.'
     ]
   }
 };

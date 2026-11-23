@@ -9,8 +9,8 @@ const ORDER_WORD = { active: 'Tracked', replaced: 'Replaced', expired: 'Expired'
 const ORDER_COLOR = { active: '#0F6E56', replaced: '#A32D2D', expired: '#854F0B', none: '#6b7280' };
 const ORDERS_URL = { amazon: 'https://www.amazon.ca/gp/css/order-history', walmart: 'https://www.walmart.ca/en/orders' };
 const SHORT_NOTE = {
-  walmart: 'Grocery, electronics, health, household, baby, pets and beauty don’t earn.',
-  amazon: 'Only some categories earn, and the cart reminder shows items added before activating.'
+  walmart: 'Grocery, electronics and video games don’t earn.',
+  amazon: 'Most departments earn, and the cart reminder shows items added before activating.'
 };
 const SHOWN = 3;
 let showAll = false;
@@ -64,7 +64,7 @@ async function showCurrent() {
     return;
   }
 
-  const s = await chrome.runtime.sendMessage({ type: 'status', storeKey: store.key });
+  const s = await chrome.runtime.sendMessage({ type: 'status', storeKey: store.key, tabId: tab.id });
   currentState = s.state;
   const st = STATE[s.state] || STATE.none;
   const replaced = s.replacedAt && s.replacedAt > (s.activatedAt || 0);
@@ -95,7 +95,9 @@ async function showCurrent() {
 
   box.replaceChildren(h('div', { className: 'card', style: '--chip-bg:' + look.bg + ';--chip-fg:' + look.fg },
     h('div', { className: 'top' },
-      h('span', {}, store.host[0].toUpperCase() + store.host.slice(1) + ' · ' + store.earn)
+      h('span', {}, store.host[0].toUpperCase() + store.host.slice(1)),
+      // Rates change with promotions, so link to the eStore instead of showing a fixed rate.
+      h('a', { href: store.estoreUrl, target: '_blank', textContent: 'Current rates', style: 'font-size:11px;color:var(--brand)' })
     ),
     h('div', { className: 'hero' },
       h('div', { className: 'badge' }, look.badge),
@@ -178,7 +180,7 @@ function buildMenu() {
   const menu = document.getElementById('menu');
   menu.replaceChildren(
     h('div', { className: 'label' }, 'Aeroplan eStore pages'),
-    ...Object.values(STORES).map(s => h('a', { href: s.estoreUrl, target: '_blank', textContent: s.name + ' · ' + s.earn })),
+    ...Object.values(STORES).map(s => h('a', { href: s.estoreUrl, target: '_blank', textContent: s.name })),
     h('hr'),
     currentStore ? h('button', {
       textContent: 'Reset ' + currentStore.name + ' activation',

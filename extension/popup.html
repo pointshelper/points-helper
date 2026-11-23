@@ -70,6 +70,12 @@
       font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; cursor: copy; }
     .feedback .addr:hover { background: none; text-decoration: underline; }
     .feedback .addr[hidden] { display: none; }
+    .feedback .links { display: block; margin-top: 4px; font-size: 11px; color: var(--faint); }
+    .feedback .links a { color: var(--brand); text-decoration: none; }
+    .feedback .links a:hover { text-decoration: underline; }
+    .estore { margin: 8px 14px 12px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+    .estore a { display: block; margin-bottom: 3px; font-size: 12px; font-weight: 600; color: var(--brand); text-decoration: none; }
+    .estore a:hover { text-decoration: underline; }
     footer { padding: 10px 14px; border-top: 1px solid var(--line); background: #fff; font-size: 11px; color: var(--faint); }
   </style>
 </head>
@@ -83,9 +89,14 @@
   <main id="current"></main>
   <div class="section"><b>Recent orders</b><span id="count"></span></div>
   <div id="orders"></div>
+  <div class="estore">
+    <a href="https://aeroplan.rewardops.com/en-CA/order-history" target="_blank">Check your eStore orders ↗</a>
+    Points can take several days to show up, and orders sometimes show “Not Eligible” at first before updating. Points can also reach your Aeroplan account before the eStore list catches up.
+  </div>
   <div class="feedback">
     <div><b>Beta</b> <span id="version"></span><br><span id="feedbackHint">Bugs or ideas? Let us know.</span>
-      <button class="addr" id="addr" hidden title="Copy address"></button></div>
+      <button class="addr" id="addr" hidden title="Copy address"></button>
+      <span class="links"><a href="https://pointshelper.github.io/points-helper/" target="_blank">What’s next</a> · <a href="https://github.com/pointshelper/points-helper" target="_blank">Code</a></span></div>
     <button id="feedback">Feedback</button>
   </div>
   <footer>Works on Amazon.ca and Walmart.ca · Not affiliated with Aeroplan</footer>

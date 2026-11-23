@@ -25,12 +25,29 @@ function safeDecode(v) {
 
 // ---- status ----------------------------------------------------------------
 
-async function cookieState(store) {
+// Incognito tabs have their own cookies. Without a storeId, chrome.cookies reads the normal
+// window's, so look up the cookie store that holds the tab being checked.
+async function cookieStoreFor(tabId) {
+  if (tabId == null) return undefined;
+  const stores = await chrome.cookies.getAllCookieStores().catch(() => []);
+  const s = stores.find(c => c.tabIds.includes(tabId));
+  return s ? s.id : undefined;
+}
+
+async function cookieState(store, tabId) {
   const result = { state: null, adblock: false };
-  if (!store.trackingCookie && !store.adblockCookie) return result;
-  const cookies = await chrome.cookies.getAll({ domain: store.host });
+  if (!store.trackingCookie && !store.adblockCookie && !store.clickRefCookie) return result;
+  const storeId = await cookieStoreFor(tabId);
+  const cookies = await chrome.cookies.getAll(storeId ? { domain: store.host, storeId } : { domain: store.host });
   if (store.adblockCookie) {
     result.adblock = cookies.some(c => c.name === store.adblockCookie && c.value === 'true');
+  }
+  // Partnerize-style: the cookie holds a click reference; ours is the one seen on the eStore landing.
+  if (store.clickRefCookie) {
+    const rec = (await getAll('track', {}))[store.key] || {};
+    // The same cookie can exist on both the store's domain and its www subdomain (an old click and the new one), so any match counts.
+    const refs = cookies.filter(c => c.name === store.clickRefCookie).map(c => safeDecode(c.value));
+    if (refs.length && rec.clickRef) result.state = refs.includes(rec.clickRef) ? 'active' : 'replaced';
   }
   if (store.trackingCookie) {
     const c = cookies.find(c => c.name === store.trackingCookie.name);
@@ -43,10 +60,10 @@ async function cookieState(store) {
   return result;
 }
 
-async function computeStatus(store) {
+async function computeStatus(store, tabId) {
   const rec = (await getAll('track', {}))[store.key] || {};
   const now = Date.now();
-  const { state: fromCookie, adblock } = await cookieState(store);
+  const { state: fromCookie, adblock } = await cookieState(store, tabId);
 
   let state = 'none';
   const act = rec.activatedAt || 0;
@@ -64,6 +81,8 @@ async function computeStatus(store) {
     state,
     activatedAt: act || null,
     replacedAt: rep || null,
+    returnedAt: rec.returnedAt || null,
+    returnedPath: rec.returnedPath || null,
     cookieChecked: !!store.trackingCookie,
     adblockCookie: adblock
   };
@@ -102,7 +121,7 @@ async function paintBadge(tabId, store) {
     await chrome.action.setTitle({ tabId, title: 'Points Helper' });
     return;
   }
-  const { state } = await computeStatus(store);
+  const { state } = await computeStatus(store, tabId);
   let [text, color] = BADGE[state];
   let title = TITLES[state];
   const issue = tabIssues.get(tabId);
@@ -138,11 +157,17 @@ async function maybeReturn(tabId, store) {
   await chrome.storage.local.remove('returnTo');
   // Give the store a moment to save its tracking cookie before leaving the landing page.
   for (let i = 0; i < 10; i++) {
-    const { state } = await cookieState(store);
+    const { state } = await cookieState(store, tabId);
     if (!store.trackingCookie || state === 'active') break;
     await new Promise(r => setTimeout(r, 500));
   }
-  if (pending.url) chrome.tabs.update(tabId, { url: pending.url }).catch(() => {});
+  if (pending.url) {
+    // Tell the page we sent you back to, so the activation card opens there (and only there).
+    let path = null;
+    try { path = new URL(pending.url).pathname; } catch (e) { /* no path */ }
+    await patchTrack(store.key, { returnedAt: Date.now(), returnedPath: path });
+    chrome.tabs.update(tabId, { url: pending.url }).catch(() => {});
+  }
 }
 
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
@@ -161,8 +186,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
 
   if (store && info.url) {
     const aff = affiliateInUrl(store, url);
-    if (aff === 'ours') await patchTrack(store.key, { activatedAt: Date.now() });
-    else if (aff === 'other') await patchTrack(store.key, { replacedAt: Date.now() });
+    if (aff === 'ours') {
+      const patch = { activatedAt: Date.now() };
+      if (store.clickRefParam && url.searchParams.get(store.clickRefParam)) patch.clickRef = url.searchParams.get(store.clickRefParam);
+      await patchTrack(store.key, patch);
+    }
+    else if (aff === 'other') {
+      // The store can rewrite the landing URL and drop utm_source but keep our clickref: that's still ours.
+      const ref = store.clickRefParam && url.searchParams.get(store.clickRefParam);
+      const rec = (await getAll('track', {}))[store.key] || {};
+      if (!(ref && ref === rec.clickRef)) await patchTrack(store.key, { replacedAt: Date.now() });
+    }
   }
 
   if (info.status === 'complete') {
@@ -184,7 +218,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const store = msg.storeKey ? STORES[msg.storeKey] : null;
 
     if (msg.type === 'status' && store) {
-      sendResponse(await computeStatus(store));
+      // The page's own tab, or (from the popup) the tab it's showing.
+      sendResponse(await computeStatus(store, sender.tab ? sender.tab.id : msg.tabId));
       if (sender.tab) updateBadge(sender.tab.id, store);
     } else if (msg.type === 'activate' && store) {
       await chrome.storage.local.set({ returnTo: { store: store.key, url: msg.returnTo || null, at: Date.now() } });
@@ -234,7 +269,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       sendResponse({ first });
     } else if (msg.type === 'resetTracking' && store) {
-      await patchTrack(store.key, { activatedAt: null, replacedAt: null });
+      await patchTrack(store.key, { activatedAt: null, replacedAt: null, clickRef: null });
       const greeted = (await chrome.storage.session.get('greeted')).greeted || {};
       delete greeted[store.key];
       await chrome.storage.session.set({ greeted });
