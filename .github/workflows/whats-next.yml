@@ -1,8 +1,13 @@
 name: What's next page
 
 on:
+  # Linear syncs each issue to a GitHub issue, so new items, title edits and Done/Canceled show up right away.
+  issues:
+    types: [opened, edited, closed, reopened, deleted, labeled, unlabeled]
+  # Status moves between open columns (Planned → In progress → Approved for Production) don't touch the
+  # GitHub issue, so a frequent schedule picks those up.
   schedule:
-    - cron: "17 * * * *" # every hour
+    - cron: "*/10 * * * *" # every 10 minutes (GitHub may start it a few minutes late)
   workflow_dispatch: {}
   push:
     branches: [main]
