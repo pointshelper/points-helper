@@ -21,7 +21,7 @@ const NOT_PLANNED_DAYS = 90;
 
 // Linear workflow state types → page columns.
 const COLUMN = { triage: 'submitted', backlog: 'planned', unstarted: 'planned', started: 'progress' };
-const KIND = { bug: 'Bug', 'store request': 'Store', idea: 'Idea' };
+const KIND = { bug: 'Bug', 'store request': 'Store', idea: 'Idea', improvement: 'Improvement' };
 
 const QUERY = `query($team: String!, $after: String) {
   issues(first: 100, after: $after, filter: { team: { key: { eq: $team } } }) {
@@ -125,7 +125,8 @@ for (const k of ['submitted', 'planned', 'progress', 'next']) {
 const newest = (a, b) => (b.at || '').localeCompare(a.at || '');
 for (const k of ['submitted', 'planned', 'progress', 'next', 'shipped']) {
   out[k].sort(newest);
-  for (const item of out[k]) delete item.at;
+  // Shipped keeps its date: the page groups items closed on the same day into one release.
+  if (k !== 'shipped') for (const item of out[k]) delete item.at;
 }
 
 await mkdir('site', { recursive: true });

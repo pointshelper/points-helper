@@ -44,11 +44,25 @@
   .cta a:hover { filter: brightness(.96); }
 
   .shipped { margin-top: -44px; margin-bottom: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px;
-    box-shadow: var(--shadow); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    box-shadow: var(--shadow); }
   [hidden] { display: none !important; }
-  .shipped b { font-size: 14px; margin-right: 4px; }
-  .shipped .c { background: var(--chip); color: var(--chip-ink); padding: 5px 11px; border-radius: 999px;
-    font-size: 13px; font-weight: 600; text-decoration: none; }
+  .shipped h2 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .shipped h2 i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--d-next); }
+  .rel { border-top: 1px solid var(--line); padding: 8px 0 2px; }
+  .rel:first-of-type { border-top: 0; }
+  .rel summary { font-size: 14px; font-weight: 600; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+  .rel summary::-webkit-details-marker { display: none; }
+  .rel summary::before { content: '▸'; color: var(--soft); font-size: 12px; transition: transform .15s; }
+  .rel[open] summary::before { transform: rotate(90deg); }
+  .rel summary span { color: var(--soft); font-weight: 500; }
+  .rel ul { list-style: none; margin: 8px 0 4px; padding: 0 0 0 18px; display: grid; gap: 6px; }
+  .rel li { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+  .rel li a { text-decoration: none; }
+  .rel li a:hover { text-decoration: underline; }
+  .tag { flex: none; width: 64px; text-align: center; padding: 1px 0; border-radius: 999px; font-size: 11px; font-weight: 600;
+    background: var(--k-store); color: var(--k-store-ink); }
+  .tag.improved { background: var(--k-feature); color: var(--k-feature-ink); }
+  .tag.fixed { background: var(--k-bug); color: var(--k-bug-ink); }
   .board { margin-top: -44px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
   .shipped:not([hidden]) + .board { margin-top: 0; }
   @media (max-width: 980px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -100,7 +114,7 @@
 </div></div>
 
 <div class="in">
-  <div class="shipped" id="shipped" hidden><b>Just shipped</b></div>
+  <section class="shipped" id="shipped" hidden><h2><i></i>Just shipped</h2></section>
   <div class="board">
     <section class="col" data-col="submitted"><h2><i style="background:var(--d-sub)"></i>Submitted<span class="n"></span></h2><div class="s">Not decided yet</div></section>
     <section class="col" data-col="planned"><h2><i style="background:var(--d-plan)"></i>Planned<span class="n"></span></h2><div class="s">We'll do it</div></section>
@@ -140,7 +154,28 @@ fetch('roadmap.json', { cache: 'no-store' })
     if ((data.shipped || []).length) {
       const box = document.getElementById('shipped');
       box.hidden = false;
-      for (const item of data.shipped) box.append(el(item.url ? 'a' : 'span', { class: 'c', href: item.url }, '✓ ' + item.title));
+      // Items closed on the same day shipped together: one group per day, newest open, older ones folded.
+      const groups = [];
+      for (const item of data.shipped) {
+        const d = item.at ? new Date(item.at) : null;
+        const key = d ? d.toLocaleDateString('en-CA') : '';
+        let g = groups.find(g => g.key === key);
+        if (!g) groups.push(g = { key, date: d, items: [] });
+        g.items.push(item);
+      }
+      groups.forEach((g, i) => {
+        const label = g.date ? g.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'Recently';
+        const n = g.items.length;
+        // New things first, then improvements, then fixes.
+        const tagOf = item => item.kind === 'Bug' ? 'Fixed' : item.kind === 'Improvement' ? 'Improved' : 'New';
+        const order = { New: 0, Improved: 1, Fixed: 2 };
+        g.items.sort((a, b) => order[tagOf(a)] - order[tagOf(b)]);
+        box.append(el('details', { class: 'rel', open: i === 0 ? '' : null },
+          el('summary', {}, label, el('span', {}, '· ' + n + (n === 1 ? ' change' : ' changes'))),
+          el('ul', {}, ...g.items.map(item => el('li', {},
+            el('span', { class: 'tag ' + tagOf(item).toLowerCase() }, tagOf(item)),
+            el(item.url ? 'a' : 'span', { href: item.url }, item.title))))));
+      });
     }
     if ((data.notPlanned || []).length) {
       const box = document.getElementById('notplanned');
