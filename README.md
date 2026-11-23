@@ -2,6 +2,10 @@
 
 A Chrome extension that checks your Aeroplan eStore points will track at Amazon.ca and Walmart.ca, and flags items that won't earn before you buy.
 
+### [➜ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/ekngfhnjmlapahlimppmandopdncagbg)
+
+Free. Works in Chrome, Edge, Brave and Arc. It's an unlisted beta, so this link is the only way to find it.
+
 **[What's next](https://pointshelper.github.io/points-helper/)**: requests and what's being worked on.
 
 ## Report a bug or ask for a store
