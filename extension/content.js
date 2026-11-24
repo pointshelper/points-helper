@@ -105,7 +105,36 @@
     return dept ? dept.textContent.replace(/\s+/g, ' ').trim() : '';
   }
 
+  // The product's brand, from Amazon's byline ("Visit the COACH Store", "Brand: Coach")
+  // or the overview table's Brand row. Empty when the page doesn't say.
+  function brandText(doc) {
+    const byline = doc.querySelector('#bylineInfo');
+    if (byline) {
+      const b = byline.textContent.replace(/\s+/g, ' ').trim()
+        .replace(/^visit the\s+/i, '').replace(/\s+store$/i, '').replace(/^brand:\s*/i, '').trim();
+      if (b) return b;
+    }
+    for (const row of doc.querySelectorAll('#productOverview_feature_div tr')) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 2 && /^\s*brand\s*$/i.test(cells[0].textContent)) {
+        return cells[1].textContent.replace(/\s+/g, ' ').trim();
+      }
+    }
+    return '';
+  }
+
+  // Label of the excluded brand this product belongs to ("Coach products"), or null.
+  function excludedBrandLabel(brand) {
+    if (!brand || !store.excludedBrands) return null;
+    const hit = store.excludedBrands.find(([, re]) => re.test(brand.trim()));
+    return hit ? hit[0] : null;
+  }
+
   function excludedCategory() {
+    const brandHit = excludedBrandLabel(brandText(document));
+    if (brandHit) {
+      return brandHit + ' don’t earn Aeroplan points at ' + store.name + ' (based on the page’s brand).';
+    }
     const text = categoryText(document);
     if (!text.trim()) return null;
     const hit = store.excluded.find(([, re]) => re.test(text));
@@ -173,8 +202,9 @@
   // ---- Amazon: which cart items are in categories that don't earn ----------
 
   // Each product page is read once in the background for its breadcrumb trail
-  // ("Toys & Games › Building Sets"), then judged with the same lists as product pages.
-  const AMZ_CATS_KEY = 'pointsHelperAmazonCats2';
+  // ("Toys & Games › Building Sets") and brand, then judged with the same lists as product pages.
+  // Saved as { c: crumb, b: brand }. Key bumped from Cats2 (crumb only) so items get their brand read.
+  const AMZ_CATS_KEY = 'pointsHelperAmazonCats3';
   const amzFetches = new Map();
 
   function amazonLabelForCrumb(text) {
@@ -187,6 +217,11 @@
     return null;
   }
 
+  // An excluded brand wins over the category (a Coach bag is in Clothing, which earns).
+  function amazonLabelFor(entry) {
+    return excludedBrandLabel(entry.b) || amazonLabelForCrumb(entry.c);
+  }
+
   function fetchAmazonCrumb(asin) {
     if (amzFetches.has(asin)) return amzFetches.get(asin);
     const job = fetch('/dp/' + asin, { credentials: 'include' })
@@ -194,7 +229,7 @@
       .then(html => {
         const d = new DOMParser().parseFromString(html, 'text/html');
         const cats = readJSON(AMZ_CATS_KEY, {});
-        cats[asin] = categoryText(d);
+        cats[asin] = { c: categoryText(d), b: brandText(d) };
         writeJSON(AMZ_CATS_KEY, cats);
       })
       .catch(() => {});
@@ -218,10 +253,10 @@
     return {
       total: items.length,
       checking: missing.length,
-      unknown: known.filter(i => !cats[i.asin]).length,
+      unknown: known.filter(i => !cats[i.asin].c && !excludedBrandLabel(cats[i.asin].b)).length,
       excluded: known
-        .filter(i => cats[i.asin] && amazonLabelForCrumb(cats[i.asin]))
-        .map(i => ({ id: i.asin, title: i.title.slice(0, 60), label: amazonLabelForCrumb(cats[i.asin]) }))
+        .filter(i => amazonLabelFor(cats[i.asin]))
+        .map(i => ({ id: i.asin, title: i.title.slice(0, 60), label: amazonLabelFor(cats[i.asin]) }))
     };
   }
 
@@ -553,7 +588,11 @@
   function render(status, ctx) {
     if (dragging) return;
     ensureHost();
-    const [color, label] = LABEL[status.state];
+    // Amazon can't confirm tracking (no cookie to read), so there "active" only means activated.
+    const sure = confirmsTracking(store);
+    const onWord = sure ? 'Tracking active' : 'Activated';
+    const [color, stateLabel] = LABEL[status.state];
+    const label = status.state === 'active' && !sure ? 'Activated for Aeroplan' : stateLabel;
     const wrap = el('div', { class: 'wrap', style: '--c:' + color });
 
     const warnings = [];
@@ -609,12 +648,13 @@
     const active = status.state === 'active';
     if (expanded) {
       let look = LOOK[status.state] || LOOK.none;
+      if (active && !sure) look = { ...look, chip: 'Activated', head: 'Activated for Aeroplan' };
       let sub = status.state === 'replaced' ? 'Activate again before you buy.'
         : status.activatedAt && status.state !== 'none' ? 'Activated ' + ago(status.activatedAt)
         : 'Earn Aeroplan points on eligible items';
       // Tracking is fine but the item or cart won't earn: lead with that, not "You're earning points".
       if (active) {
-        const onNote = 'Tracking is on · activated ' + ago(status.activatedAt);
+        const onNote = (sure ? 'Tracking is on · activated ' : 'Activated ') + ago(status.activatedAt);
         const bad = { bg: '#FCEBEB', fg: '#791F1F', badge: '!' };
         const warn = { bg: '#FAEEDA', fg: '#633806', badge: '!' };
         if (ctx.preCart.length) {
@@ -642,6 +682,8 @@
         active && !warnings.length && !(cc && cc.total) && !ctx.orderLogged
           ? el('div', { class: 'ok' }, 'You’re set. Finish buying in this session.')
           : null,
+        // Only when nothing is wrong: if an item won't earn, that's what matters, not whether tracking is confirmed.
+        active && !sure && !warnings.length ? el('div', { class: 'small' }, unconfirmedNote(store)) : null,
         warnings.map(([cls, text]) => text instanceof Element ? text : el('div', { class: 'warn ' + cls }, text)),
         // Category lists change (e.g. Black Friday), so always point to the eStore's current list:
         // an item marked as earning may have been dropped since this version was made.
@@ -678,18 +720,18 @@
       let pillColor = color;
       if (ctx.preCart.length) {
         const n = ctx.preCart.length;
-        text = 'Tracking active · ' + n + ' cart item' + (n === 1 ? '' : 's') + ' won’t earn';
+        text = onWord + ' · ' + n + ' cart item' + (n === 1 ? '' : 's') + ' won’t earn';
         pillColor = '#c62828';
       } else if (cc && cc.excluded.length) {
         const n = cc.excluded.length;
-        text = (active ? 'Tracking active' : label) + ' · ' +
+        text = (active ? onWord : label) + ' · ' +
           (n === cc.total ? 'Nothing in your cart earns' : n + ' of ' + cc.total + ' cart items won’t earn');
         pillColor = '#c62828';
       } else if (cc && cc.unknown && !cc.checking) {
-        text = (active ? 'Tracking active' : label) + ' · ' + cc.unknown + ' cart item' + (cc.unknown === 1 ? '' : 's') + ' not checked';
+        text = (active ? onWord : label) + ' · ' + cc.unknown + ' cart item' + (cc.unknown === 1 ? '' : 's') + ' not checked';
         pillColor = '#b26a00';
       } else if (ctx.excluded) {
-        text = (active ? 'Tracking active' : label) + ' · This item won’t earn';
+        text = (active ? onWord : label) + ' · This item won’t earn';
         pillColor = '#b26a00';
       } else if (warnings.length && active) {
         text = label + ' · ' + warnings.length + ' note' + (warnings.length > 1 ? 's' : '');
@@ -779,7 +821,7 @@
       if (r && r.first) sessionStorage.setItem(ACT_OPEN_KEY, JSON.stringify({ path: location.pathname }));
     }
     // Just came back from the eStore: open the card once for this activation, so you see
-    // "You're earning points" even on pages with no pill (home, search).
+    // that you're activated even on pages with no pill (home, search).
     if (status.state === 'active' && status.activatedAt && Date.now() - status.activatedAt < 2 * 60 * 1000 &&
         sessionStorage.getItem(ACT_SHOWN_KEY) !== String(status.activatedAt)) {
       sessionStorage.setItem(ACT_SHOWN_KEY, String(status.activatedAt));
@@ -897,6 +939,128 @@
   timers.push(setInterval(() => {
     if (!document.hidden && pageType(store, location.pathname) === 'cart') refresh(true);
   }, 3000));
+
+  // ---- A status line on each order in the store's order history (POI-33 Amazon, POI-39 Walmart) ----
+  // Uses only the order log on this device: no extra requests, nothing sent anywhere.
+  // Order cards appear after load (Amazon decrypts them in the browser; both load more on
+  // "next page"), so watch for cards instead of reading the page once.
+  const digits = s => (s || '').replace(/\D/g, '');
+  const ORDER_PAGES = {
+    amazon: {
+      path: /^\/(gp\/css\/order-history|gp\/your-account\/order-history|your-orders\/orders)/,
+      cards: '.js-order-card',
+      number: card => {
+        const e = card.querySelector('.yohtmlc-order-id'); // missing while the card is still encrypted
+        const m = e && e.textContent.match(/\d{3}-\d{7}-\d{7}/);
+        return m ? m[0] : null;
+      },
+      anchor: card => card.querySelector('.order-header')
+    },
+    // Walmart's class names are generated, so only its test ids are used. One order can have
+    // several groups (one per delivery); the line goes on the first.
+    walmart: {
+      path: /^\/(en|fr)\/(orders|commandes)\/?$/,
+      cards: '[data-testid^="orderGroup-"]',
+      number: card => {
+        const b = card.querySelector('[data-automation-id^="view-order-details-link-"]');
+        return b ? b.getAttribute('data-automation-id').slice('view-order-details-link-'.length) : null;
+      },
+      anchor: card => card.firstElementChild,
+      // At the top of the card: at the bottom it reads as if it belonged to the next card.
+      top: true
+    }
+  };
+  const ordersPage = ORDER_PAGES[store.key] || null;
+  const ESTORE_ORDERS = 'https://aeroplan.rewardops.com/en-CA/order-history';
+  const CLAIM_AFTER_DAYS = 14;
+  const lineRoots = new WeakMap();
+  let orderLog = null; // order number (digits only) → logged order
+  let ordersObserver = null;
+  let ordersTimer = null;
+
+  async function loadOrderLog() {
+    const list = (await chrome.runtime.sendMessage({ type: 'orders' }).catch(() => null)) || [];
+    orderLog = new Map(list.filter(o => o.store === store.key && o.orderNumber).map(o => [digits(o.orderNumber), o]));
+  }
+
+  // What we know about the order, in the same words as the popup: "Tracked" only where the store's
+  // cookie could be read (Walmart), "Activated" where it can't (Amazon).
+  function orderLine(o) {
+    // Only you can say points arrived (Points Helper can't see your account), so say it's your mark.
+    if (o.arrived) {
+      return { text: 'You marked points arrived' + (o.arrived.points ? ' · ' + o.arrived.points.toLocaleString('en-CA') + ' pts' : ''), color: '#0F6E56', mark: '✓' };
+    }
+    const claim = o.state === 'active' && (Date.now() - o.at) / 86400000 >= CLAIM_AFTER_DAYS;
+    if (o.state === 'active') {
+      return { text: (confirmsTracking(store) ? 'Tracked' : 'Activated') + ' when ordered', color: '#0F6E56', mark: '●', claim };
+    }
+    if (o.state === 'replaced') return { text: 'Tracking was replaced before this order', color: '#A32D2D', mark: '●' };
+    if (o.state === 'expired') return { text: 'Activation had expired when ordered', color: '#854F0B', mark: '●' };
+    return { text: 'Not activated when ordered', color: '#6b7280', mark: '●' };
+  }
+
+  function annotateOrderCards() {
+    if (stale()) { if (ordersObserver) ordersObserver.disconnect(); return; }
+    if (!orderLog || !ordersPage) return;
+    const seen = new Set();
+    for (const card of document.querySelectorAll(ordersPage.cards)) {
+      const header = ordersPage.anchor(card);
+      const num = digits(ordersPage.number(card));
+      if (!header || !num) continue;
+      let line = header.querySelector(':scope > points-helper-order');
+      const o = seen.has(num) ? null : orderLog.get(num);
+      seen.add(num);
+      if (!o) { if (line) line.remove(); continue; } // not in the log (before install, other device), or a later group of the same order
+      const info = orderLine(o);
+      const sig = JSON.stringify(info);
+      if (line && line.dataset.sig === sig) continue;
+      if (!line) {
+        line = document.createElement('points-helper-order');
+        lineRoots.set(line, line.attachShadow({ mode: 'closed' }));
+        if (ordersPage.top) header.prepend(line); else header.append(line);
+      }
+      line.dataset.sig = sig;
+      const style = document.createElement('style');
+      style.textContent = `
+        :host { display: block; padding: 7px ${store.key === 'amazon' ? '18px 8px' : '16px 8px'};
+          border-${ordersPage.top ? 'bottom' : 'top'}: 1px solid #d5d9d9;
+          font-family: inherit; font-size: 12px; line-height: 1.4; color: #565959; }
+        b { font-weight: 600; color: ${info.color}; }
+        a { color: #854F0B; }
+      `;
+      const row = el('div', {},
+        el('b', {}, info.mark + ' ' + info.text),
+        ' · Points Helper',
+        info.claim ? [' · ', el('a', { href: ESTORE_ORDERS, target: '_blank', rel: 'noopener',
+          title: 'Still no points ' + CLAIM_AFTER_DAYS + '+ days after ordering? You can file a missing points claim from your eStore orders.' },
+          'No points yet? Claim them')] : null
+      );
+      lineRoots.get(line).replaceChildren(style, row);
+    }
+  }
+
+  // Start or stop watching as you move to and from the order history (stores change pages without reloads).
+  function watchOrdersPage() {
+    if (!ordersPage || stale()) return;
+    const on = ordersPage.path.test(location.pathname);
+    if (on && !ordersObserver) {
+      ordersObserver = new MutationObserver(() => {
+        clearTimeout(ordersTimer);
+        ordersTimer = setTimeout(annotateOrderCards, 300);
+      });
+      ordersObserver.observe(document.body, { childList: true, subtree: true });
+      loadOrderLog().then(annotateOrderCards);
+    } else if (!on && ordersObserver) {
+      ordersObserver.disconnect();
+      ordersObserver = null;
+    }
+  }
+  watchOrdersPage();
+  timers.push(setInterval(watchOrdersPage, 1000));
+  // Marking "Points arrived" in the popup updates the lines straight away.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.orders && ordersObserver) loadOrderLog().then(annotateOrderCards);
+  });
 
   // Product breadcrumbs can load late; check again shortly after.
   refresh(true);

@@ -25,12 +25,12 @@ No GitHub account? Email **pointshelper.support@gmail.com** or use the Feedback 
 ## Privacy
 
 - It only runs on the stores it supports. Chrome doesn't let it see any other site.
-- Everything it saves (activation times, your order log) stays in your browser.
+- Everything it saves (activation times, your order log, points you mark as arrived) stays in your browser.
 - It sends nothing anywhere: no accounts, no analytics, no servers.
 - It never changes links or tracking. It only reads them to tell you whether points will track.
 
 ## The code
 
-The [`extension`](extension) folder has the code for the version on the Chrome Web Store (0.1.2), so you can check what it does. It's shared for transparency, not as open source.
+The [`extension`](extension) folder has the code for the version on the Chrome Web Store (0.1.3), so you can check what it does. It's shared for transparency, not as open source.
 
 Not affiliated with Aeroplan or Air Canada.

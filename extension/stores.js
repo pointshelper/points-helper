@@ -39,6 +39,11 @@ const STORES = {
       ['Digital music & video', /digital (music|video)|prime video/i],
       ['Gift cards', /gift cards?/i]
     ],
+    // Brands that never earn, whatever the category (eStore exclusions, re-checked 2026-11-23).
+    // Matched against the product's brand line only, never the title (a "bag for Coach purses" is fine).
+    excludedBrands: [
+      ['Coach products', /^coach(\s+new york)?$/i]
+    ],
     // Amazon only pays on these (eStore "eligible categories", re-checked 2026-11-22:
     // toys, video games, automotive, movies & music and computers were added since 2026-11-11).
     // Anything else gets a "not on the list" note.
@@ -96,6 +101,17 @@ const STORES = {
     ]
   }
 };
+
+// Whether the extension can read the store's own record of the eStore click (a cookie).
+// Amazon keeps it on its servers, so there "active" only means you activated: say "Activated", not "Tracked".
+function confirmsTracking(store) {
+  return !!(store && (store.trackingCookie || store.clickRefCookie));
+}
+
+function unconfirmedNote(store) {
+  return store.name + ' doesn’t let Points Helper confirm tracking, so this only means you activated. ' +
+    'Points usually show up within a week or two.';
+}
 
 function storeForHost(hostname) {
   return Object.values(STORES).find(s => hostname === s.host || hostname.endsWith('.' + s.host)) || null;

@@ -123,12 +123,14 @@ async function paintBadge(tabId, store) {
   }
   const { state } = await computeStatus(store, tabId);
   let [text, color] = BADGE[state];
-  let title = TITLES[state];
+  // Amazon can't confirm tracking (no cookie to read), so there "active" only means activated.
+  const sure = confirmsTracking(store);
+  let title = state === 'active' && !sure ? 'Activated for Aeroplan' : TITLES[state];
   const issue = tabIssues.get(tabId);
   if (state === 'active' && issue) {
     text = '!';
     color = issue.level === 'bad' ? '#c62828' : '#b26a00';
-    title = 'Tracking active, but ' + issue.message;
+    title = (sure ? 'Tracking active' : 'Activated') + ', but ' + issue.message;
   }
   await chrome.action.setBadgeText({ tabId, text });
   await chrome.action.setBadgeBackgroundColor({ tabId, color });
@@ -266,6 +268,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
     } else if (msg.type === 'orders') {
       sendResponse(await getAll('orders', []));
+    } else if (msg.type === 'markArrived') {
+      // You mark it yourself in the popup: stays on this device, nothing is read from Aeroplan.
+      const orders = await getAll('orders', []);
+      const o = orders.find(x => x.store === msg.store && x.at === msg.at);
+      if (o) {
+        if (msg.clear) delete o.arrived;
+        else {
+          const pts = Number(msg.points);
+          o.arrived = { at: Date.now(), points: Number.isFinite(pts) && pts > 0 ? Math.round(pts) : null };
+        }
+        await chrome.storage.local.set({ orders });
+      }
+      sendResponse({ ok: !!o });
     } else if (msg.type === 'clearOrders') {
       await chrome.storage.local.set({ orders: [] });
       sendResponse({ ok: true });
