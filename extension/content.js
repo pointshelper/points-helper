@@ -1,4 +1,7 @@
 (() => {
+  // Started again in an open tab after you allow a store's site access: run only once.
+  if (window.__pointsHelperLoaded) return;
+  window.__pointsHelperLoaded = true;
   const store = storeForHost(location.hostname);
   if (!store) return;
 
@@ -16,6 +19,7 @@
   let host = null;
   let root = null;
   let expanded = false;
+  let rulesOpen = false; // "What counts" stays open across redraws until you close it
 
   // Where the pill sits, if the user dragged it: { right, top } in px from the window's top-right.
   // Saved for all stores; double-click the pill to put it back.
@@ -94,10 +98,18 @@
 
   // The page's category: its breadcrumb trail, or (Amazon devices have none) the department bar's name.
   function categoryText(doc) {
+    // Read each crumb on its own: some stores (Best Buy) have no spaces between them, which
+    // turned "Computers & Tablets" + "Laptops" into "TabletsLaptops" and hid the word "Laptops".
+    const crumbText = el => {
+      const items = [...el.querySelectorAll('li')]
+        .map(li => li.textContent.replace(/\s+/g, ' ').trim())
+        .filter(t => t && !/^[›>\/|]+$/.test(t));
+      return items.length ? items.join(' › ') : el.textContent.replace(/\s+/g, ' ').trim();
+    };
     const crumbs = store.breadcrumbs
       .map(sel => doc.querySelector(sel))
       .filter(Boolean)
-      .map(el => el.textContent.replace(/\s+/g, ' ').trim())
+      .map(crumbText)
       .join(' ')
       .trim();
     if (crumbs || store.key !== 'amazon') return crumbs;
@@ -108,6 +120,13 @@
   // The product's brand, from Amazon's byline ("Visit the COACH Store", "Brand: Coach")
   // or the overview table's Brand row. Empty when the page doesn't say.
   function brandText(doc) {
+    // Stores with a "Brand: Apple" line under the title (Best Buy).
+    if (store.brandSelector) {
+      for (const el of doc.querySelectorAll(store.brandSelector)) {
+        const m = el.textContent.replace(/\s+/g, ' ').trim().match(/^brand:\s*(.+)$/i);
+        if (m) return m[1].trim();
+      }
+    }
     const byline = doc.querySelector('#bylineInfo');
     if (byline) {
       const b = byline.textContent.replace(/\s+/g, ' ').trim()
@@ -130,7 +149,23 @@
     return hit ? hit[0] : null;
   }
 
+  // Cart and checkout lines that would cancel the points on the whole order (store.orderRisk).
+  // Only the line items are read, never the rest of the page: LEGO mentions Insiders everywhere.
+  function orderRiskItems(page) {
+    const risk = store.orderRisk;
+    if (!risk || (page !== 'cart' && page !== 'checkout')) return [];
+    return [...document.querySelectorAll(risk.lines)]
+      .filter(line => risk.match.test(line.textContent.replace(/\s+/g, ' ')))
+      .map(line => {
+        const t = line.querySelector(risk.title);
+        return (t ? t.textContent : line.textContent).replace(/\s+/g, ' ').trim().slice(0, 80);
+      });
+  }
+
   function excludedCategory() {
+    // Pages that never earn, known from the address alone (LEGO gift cards have no breadcrumb).
+    const pathHit = (store.excludedPaths || []).find(([, re]) => re.test(location.pathname));
+    if (pathHit) return pathHit[0] + ' don’t earn Aeroplan points at ' + store.name + '.';
     const brandHit = excludedBrandLabel(brandText(document));
     if (brandHit) {
       return brandHit + ' don’t earn Aeroplan points at ' + store.name + ' (based on the page’s brand).';
@@ -429,6 +464,73 @@
     };
   }
 
+  // ---- Stores whose product pages carry the breadcrumb and brand in their HTML (Best Buy) ----
+
+  // store.cartLines = { link, id }: the cart's product-name links and how to read the product ID
+  // from their address. Each product page is read once in the background and judged with the
+  // same breadcrumb and brand rules as product pages. Saved per store as { c: crumb, b: brand }.
+  const pageFetches = new Map();
+
+  function linkedCartItems() {
+    const found = new Map();
+    for (const a of document.querySelectorAll(store.cartLines.link)) {
+      const m = a.pathname.match(store.cartLines.id);
+      if (m && !found.has(m[1])) found.set(m[1], { id: m[1], href: a.pathname, title: cleanTitle(a.innerText) || 'An item' });
+    }
+    return [...found.values()];
+  }
+
+  function labelForPage(entry) {
+    if (!entry) return null;
+    if (excludedBrandLabel(entry.b)) return excludedBrandLabel(entry.b);
+    const hit = entry.c && store.excluded.find(([, re]) => re.test(entry.c));
+    return hit ? hit[0] : null;
+  }
+
+  function fetchProductPage(item, key) {
+    if (pageFetches.has(item.id)) return pageFetches.get(item.id);
+    const job = fetch(item.href, { credentials: 'include' })
+      .then(r => r.text())
+      .then(html => {
+        const d = new DOMParser().parseFromString(html, 'text/html');
+        const cats = readJSON(key, {});
+        cats[item.id] = { c: categoryText(d), b: brandText(d) };
+        writeJSON(key, cats);
+      })
+      .catch(() => {});
+    pageFetches.set(item.id, job);
+    return job;
+  }
+
+  // Best Buy redraws the cart now and then, and for a moment there are no lines on the page.
+  // Keep the last items for a few seconds so the warning (and the toolbar "!") doesn't flicker off.
+  let lastCartItems = null;
+  function linkedCartCheck(page) {
+    if (!store.cartLines || page !== 'cart') return null;
+    let items = linkedCartItems();
+    if (items.length) lastCartItems = { at: Date.now(), href: location.href, items };
+    else if (lastCartItems && lastCartItems.href === location.href && Date.now() - lastCartItems.at < 8000) items = lastCartItems.items;
+    if (!items.length) return null;
+    const key = 'pointsHelperCats_' + store.key;
+    const cats = readJSON(key, {});
+    const missing = items.filter(i => !(i.id in cats));
+    if (missing.length) {
+      (async () => {
+        await inBatches(missing, i => fetchProductPage(i, key), 2);
+        refresh(true);
+      })();
+    }
+    const known = items.filter(i => i.id in cats);
+    return {
+      total: items.length,
+      checking: missing.length,
+      unknown: known.filter(i => !cats[i.id].c && !excludedBrandLabel(cats[i.id].b)).length,
+      excluded: known
+        .filter(i => labelForPage(cats[i.id]))
+        .map(i => ({ id: i.id, title: i.title.slice(0, 60), label: labelForPage(cats[i.id]) }))
+    };
+  }
+
   // "LEGO Friends Cat Birthday Party & Tree House Building Toy - ..." -> "LEGO Friends Cat Birthday Party & Tree…"
   function shortTitle(t, max = 42) {
     t = (t || '').replace(/\s+/g, ' ').trim();
@@ -596,6 +698,20 @@
     const wrap = el('div', { class: 'wrap', style: '--c:' + color });
 
     const warnings = [];
+    // An item that cancels the points on the whole order (LEGO Insiders/VIP rewards and perks).
+    if (ctx.orderRisk.length) {
+      const names = ctx.orderRisk;
+      warnings.push(['bad', el('div', { class: 'warn bad' },
+        el('div', { class: 'items' }, el('div', { class: 'group' },
+          el('div', { class: 'item' },
+            el('span', { class: 'name' }, store.orderRisk.label),
+            el('span', { class: 'cat' }, names.length + ' item' + (names.length === 1 ? '' : 's'))
+          ),
+          el('div', { class: 'names', title: names.join('\n') }, names.slice(0, 3).map(t => shortTitle(t, 30)).join(' · '))
+        )),
+        el('div', { class: 'more' }, store.orderRisk.message)
+      )]);
+    }
     if (status.state === 'replaced') {
       warnings.push(['bad', 'Another site or extension replaced the Aeroplan tracking. Activate again before you buy.']);
     }
@@ -646,6 +762,7 @@
     } }, '×');
 
     const active = status.state === 'active';
+    const stale = isStale(status);
     if (expanded) {
       let look = LOOK[status.state] || LOOK.none;
       if (active && !sure) look = { ...look, chip: 'Activated', head: 'Activated for Aeroplan' };
@@ -672,7 +789,7 @@
       wrap.append(el('div', { class: 'panel', style: '--chip-bg:' + look.bg + ';--chip-fg:' + look.fg },
         // The card's top row is a drag handle too: on pages with no pill (home, search) it's the only one.
         el('div', { class: 'top', onpointerdown: e => { if (!e.target.closest('.x')) startDrag(e, wrap); } },
-          el('span', { class: 'where' }, store.host[0].toUpperCase() + store.host.slice(1)),
+          el('span', { class: 'where' }, store.site || store.host[0].toUpperCase() + store.host.slice(1)),
           close
         ),
         el('div', { class: 'hero' },
@@ -680,7 +797,9 @@
           el('div', {}, el('div', { class: 'headline' }, look.head), el('div', { class: 'sub' }, sub))
         ),
         active && !warnings.length && !(cc && cc.total) && !ctx.orderLogged
-          ? el('div', { class: 'ok' }, 'You’re set. Finish buying in this session.')
+          ? (stale
+            ? el('div', { class: 'warn' }, 'Activated ' + ago(status.activatedAt) + '. Activate again before you buy, to be safe.')
+            : el('div', { class: 'ok' }, 'You’re set. Finish buying in this session.'))
           : null,
         // Only when nothing is wrong: if an item won't earn, that's what matters, not whether tracking is confirmed.
         active && !sure && !warnings.length ? el('div', { class: 'small' }, unconfirmedNote(store)) : null,
@@ -702,12 +821,16 @@
             ? 'The other ' + (cc.total - cc.unknown) + ' cart item' + (cc.total - cc.unknown > 1 ? 's are' : ' is') + ' in categories that earn.'
             : 'All ' + cc.total + ' cart item' + (cc.total > 1 ? 's are' : ' is') + ' in categories that earn.')
           : null,
-        ctx.orderLogged ? el('div', { class: 'ok' }, 'Order ' + ctx.orderLogged + ' saved to your log.') : null,
-        el('details', {},
+        ctx.orderLogged ? el('div', { class: 'ok' },
+          ctx.orderLogged.pending ? 'Saving your order…'
+          : ctx.orderLogged.num ? 'Order ' + ctx.orderLogged.num + ' saved to your log.'
+          : 'Order saved to your log. ' + (store.noNumberHint || 'Add the order number from your order email.')) : null,
+        // POI-44: the card is redrawn every few seconds on the cart page; keep this open if you opened it.
+        el('details', { ...(rulesOpen ? { open: '' } : {}), ontoggle: e => { rulesOpen = e.currentTarget.open; } },
           el('summary', {}, 'What counts'),
           el('ul', {}, store.rules.map(r => el('li', {}, r)))
         ),
-        el('button', { class: 'btn' + (active ? '' : ' primary'), onclick: activate },
+        el('button', { class: 'btn' + (active && !stale ? '' : ' primary'), onclick: activate },
           active ? 'Activate again' : 'Activate on the eStore'),
         active ? null : el('div', { class: 'small' }, 'Opens the eStore page for ' + store.name +
           '. Click “Shop and earn” there and you’ll come back here.')
@@ -718,7 +841,10 @@
       // Say the important thing on the pill itself; details stay one click away.
       let text = label;
       let pillColor = color;
-      if (ctx.preCart.length) {
+      if (ctx.orderRisk.length) {
+        text = (active ? onWord : label) + ' · ' + store.orderRisk.pill;
+        pillColor = '#c62828';
+      } else if (ctx.preCart.length) {
         const n = ctx.preCart.length;
         text = onWord + ' · ' + n + ' cart item' + (n === 1 ? '' : 's') + ' won’t earn';
         pillColor = '#c62828';
@@ -803,7 +929,13 @@
     if (!force && location.href === lastHref) return;
     lastHref = location.href;
 
-    const page = pageType(store, location.pathname);
+    // Order details page: fill in the number of an order logged without one (Uniqlo).
+    const detail = store.orderDetail && location.pathname.match(store.orderDetail);
+    if (detail) {
+      chrome.runtime.sendMessage({ type: 'orderNumber', storeKey: store.key, orderNumber: detail[1] }).catch(() => {});
+    }
+
+    const page = pageType(store, location.pathname, location.search);
 
     let status;
     try {
@@ -860,13 +992,15 @@
       excluded: page === 'product' ? excludedCategory() : null,
       preCart: status.state === 'active' && (page === 'cart' || page === 'checkout')
         ? await itemsAddedBeforeActivation(status.activatedAt) : [],
-      cartCheck: walmartCartCheck(page) || await amazonCartCheck(page),
+      cartCheck: walmartCartCheck(page) || linkedCartCheck(page) || await amazonCartCheck(page),
+      orderRisk: orderRiskItems(page),
       orderLogged: null
     };
 
     // Open the card by itself when cart items won't earn, unless you closed it for these same items.
     const cc = ctx.cartCheck;
-    ctx.problemKey = ctx.preCart.length ? 'precart:' + ctx.preCart.map(i => i.asin).sort().join(',')
+    ctx.problemKey = ctx.orderRisk.length ? 'orderrisk:' + ctx.orderRisk.sort().join(',')
+      : ctx.preCart.length ? 'precart:' + ctx.preCart.map(i => i.asin).sort().join(',')
       : cc && cc.excluded.length ? 'walmartcart:' + cc.excluded.map(i => i.id).sort().join(',')
       : null;
     if (ctx.problemKey && !expanded && sessionStorage.getItem(PROBLEM_KEY) !== ctx.problemKey) {
@@ -876,9 +1010,9 @@
     if (page === 'confirm') {
       const key = location.href;
       if (!loggedOrders.has(key)) {
-        loggedOrders.set(key, '(looking for the order number…)');
+        loggedOrders.set(key, { pending: true });
         logOrder(status, status.adblockCookie || ctx.adblockBait).then(num => {
-          loggedOrders.set(key, num || '(no number found — check your order email)');
+          loggedOrders.set(key, { num });
           refresh(true);
         });
       }
@@ -894,7 +1028,9 @@
     else render(status, ctx);
 
     // Keep the toolbar badge in line with the page.
-    if (ctx.preCart.length) {
+    if (ctx.orderRisk.length) {
+      reportIssue('bad', store.orderRisk.pill.toLowerCase());
+    } else if (ctx.preCart.length) {
       reportIssue('bad', ctx.preCart.length + ' cart item' + (ctx.preCart.length > 1 ? 's' : '') + ' won’t earn');
     } else if (cc && cc.excluded.length) {
       reportIssue('bad', cc.excluded.length === cc.total ? 'nothing in your cart earns'
@@ -917,7 +1053,8 @@
   // The popup asks what this page found, and can bring the card back after it was hidden with ×.
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'pageState') {
-      sendResponse({ issue: lastIssue, hidden: !host });
+      // shown: the card is open on the page, so the popup doesn't need to offer "Show details".
+      sendResponse({ issue: lastIssue, hidden: !host, shown: !!host && expanded });
     } else if (msg.type === 'showOnPage') {
       sessionStorage.removeItem(HIDE_KEY);
       expanded = true;

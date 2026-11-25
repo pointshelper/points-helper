@@ -9,10 +9,16 @@ const ORDER_WORD = { active: 'Tracked', replaced: 'Replaced', expired: 'Expired'
 // Stores whose tracking can't be confirmed (Amazon): say what we know, that you activated.
 const ORDER_WORD_UNCONFIRMED = { active: 'Activated', none: 'Not activated' };
 const ORDER_COLOR = { active: '#0F6E56', replaced: '#A32D2D', expired: '#854F0B', none: '#6b7280' };
-const ORDERS_URL = { amazon: 'https://www.amazon.ca/gp/css/order-history', walmart: 'https://www.walmart.ca/en/orders' };
+const ORDERS_URL = { amazon: 'https://www.amazon.ca/gp/css/order-history', walmart: 'https://www.walmart.ca/en/orders',
+  bestbuy: 'https://www.bestbuy.ca/order/en-ca' };
 const SHORT_NOTE = {
   walmart: 'Grocery, electronics and video games don’t earn.',
-  amazon: 'Most departments earn, and the cart reminder shows items added before activating.'
+  amazon: 'Most departments earn, and the cart reminder shows items added before activating.',
+  uniqlo: 'Everything earns except gift cards. Pause your ad blocker before clicking “Shop and earn”.',
+  bestbuy: 'Only some categories earn: no computers, phones, TVs, games, Apple or Bose. Accept Best Buy’s cookies.',
+  decathlon: 'Everything earns except gift cards. Accept Decathlon’s cookies, or the points won’t track.',
+  lego: 'An Insiders (VIP) reward or perk in the order cancels all the points. Accept LEGO’s cookies.',
+  marriott: 'Book a regular rate: member offers, packages and negotiated rates don’t earn. Points come after check-out.'
 };
 const SHOWN = 3;
 let showAll = false;
@@ -44,6 +50,8 @@ function fullDate(ts) {
 let currentStore = null;
 let currentTab = null;
 let currentState = null;
+// Optional stores you've allowed, read before any click (the menu can't wait inside one).
+const allowed = new Set();
 
 async function showCurrent() {
   const box = document.getElementById('current');
@@ -59,10 +67,15 @@ async function showCurrent() {
       h('div', { className: 'hero', style: 'margin-top:0' },
         h('div', { className: 'badge' }, '–'),
         h('div', {}, h('b', {}, 'Off on this site'),
-          h('span', {}, 'Points Helper only runs on Amazon.ca and Walmart.ca.'))
+          h('span', {}, 'Points Helper only runs on ' + storeSites() + '.'))
       ),
-      h('div', { className: 'note' }, 'Chrome doesn’t let it see or read this page, and it sends nothing anywhere.')
+      h('div', { className: 'note' }, 'It doesn’t read this page, and it sends nothing anywhere.')
     ));
+    return;
+  }
+
+  if (!(await hasAccess(store))) {
+    showAccessCard(box, store, tab);
     return;
   }
 
@@ -76,7 +89,10 @@ async function showCurrent() {
     : s.state === 'expired' ? 'Last activated ' + ago(s.activatedAt) + '. Activate again before you buy.'
     : s.activatedAt ? 'Activated ' + ago(s.activatedAt)
     : 'Activate on the eStore before you shop.';
-  let note = s.state === 'active' ? 'Finish buying in this session. ' + (SHORT_NOTE[store.key] || '')
+  const stale = isStale(s);
+  if (stale) st = { ...st, primary: true };
+  let note = stale ? 'Activated ' + ago(s.activatedAt) + '. Activate again before you buy, to be safe.'
+    : s.state === 'active' ? 'Finish buying in this session. ' + (SHORT_NOTE[store.key] || '')
     : SHORT_NOTE[store.key] || '';
 
   // What the page itself found (items that won't earn), so the toolbar "!" is explained here too.
@@ -90,8 +106,10 @@ async function showCurrent() {
       : { bg: '#FAEEDA', fg: '#633806', badge: '!' };
     look.head = msg[0].toUpperCase() + msg.slice(1);
     sub = (sure ? 'Tracking is on · activated ' : 'Activated ') + ago(s.activatedAt);
-    note = null;
+    // The store's notes stay: they still apply when something in the cart won't earn.
   }
+  // Only offer to open the details when they aren't already open on the page.
+  const detailsOnPage = !!(page && page.shown);
   const showOnPage = async () => {
     await chrome.tabs.sendMessage(tab.id, { type: 'showOnPage' }).catch(() => {});
     window.close();
@@ -99,7 +117,7 @@ async function showCurrent() {
 
   box.replaceChildren(h('div', { className: 'card', style: '--chip-bg:' + look.bg + ';--chip-fg:' + look.fg },
     h('div', { className: 'top' },
-      h('span', {}, store.host[0].toUpperCase() + store.host.slice(1)),
+      h('span', {}, siteName(store)),
       // Rates change with promotions, so link to the eStore instead of showing a fixed rate.
       h('a', { href: store.estoreUrl, target: '_blank', textContent: 'Current rates', style: 'font-size:11px;color:var(--brand)' })
     ),
@@ -110,10 +128,11 @@ async function showCurrent() {
     s.adblockCookie ? h('div', { className: 'note' }, store.name + ' reports an ad blocker. Turn it off for this site so points track.') : null,
     note ? h('div', { className: 'note' }, note) : null,
     s.state === 'active' && !sure && !issue ? h('div', { className: 'note' }, unconfirmedNote(store)) : null,
-    issue ? h('button', { className: 'btn primary', textContent: 'Show details on the page', onclick: showOnPage }) : null,
+    issue && !detailsOnPage ? h('button', { className: 'btn primary', textContent: 'Show details on the page', onclick: showOnPage }) : null,
+    issue && detailsOnPage ? h('div', { className: 'note' }, 'The details are open on the page.') : null,
     h('button', {
       className: 'btn' + (st.primary ? ' primary' : ''),
-      textContent: st.primary ? 'Activate on the eStore' : 'Activate again',
+      textContent: st.primary && !stale ? 'Activate on the eStore' : 'Activate again',
       onclick: async () => {
         await chrome.runtime.sendMessage({ type: 'activate', storeKey: store.key, returnTo: tab.url });
         window.close();
@@ -122,6 +141,53 @@ async function showCurrent() {
     !issue && page && page.hidden
       ? h('button', { className: 'link', style: 'display:block;margin:8px auto 0', textContent: 'Show the helper on this page', onclick: showOnPage })
       : null
+  ));
+}
+
+function siteName(store) {
+  return store.site || store.host[0].toUpperCase() + store.host.slice(1);
+}
+
+// "Amazon.ca, Walmart.ca and Uniqlo.com"
+function storeSites() {
+  const names = Object.values(STORES).map(siteName);
+  return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+}
+
+// Ask Chrome for one store's site access. What to do once it's allowed is saved first and
+// done by the background, since Chrome's prompt can close this popup before it answers.
+// Chrome only shows the prompt during the click itself, so nothing is awaited before asking.
+// (The saved intent lands long before you answer the prompt.)
+async function requestAccess(store, intent) {
+  chrome.storage.session.set({ afterGrant: { store: store.key, at: Date.now(), ...intent } });
+  const ok = await chrome.permissions.request({ origins: store.origins }).catch(() => false);
+  if (!ok) await chrome.storage.session.remove('afterGrant');
+  return ok;
+}
+
+// POI-36: a store whose site you haven't allowed yet.
+function showAccessCard(box, store, tab, denied) {
+  const allow = async activate => {
+    const ok = await requestAccess(store, { activate, returnTo: tab.url, tabId: tab.id });
+    if (!ok) return showAccessCard(box, store, tab, true);
+    if (activate) window.close();
+    else showCurrent();
+  };
+  box.replaceChildren(h('div', { className: 'card', style: '--chip-bg:#F1EFE8;--chip-fg:#444441' },
+    h('div', { className: 'top' },
+      h('span', {}, siteName(store)),
+      h('a', { href: store.estoreUrl, target: '_blank', textContent: 'Current rates', style: 'font-size:11px;color:var(--brand)' })
+    ),
+    h('div', { className: 'hero' },
+      h('div', { className: 'badge' }, '–'),
+      h('div', {}, h('b', {}, 'Allow access to ' + store.name),
+        h('span', {}, 'Needed to check your Aeroplan tracking here.'))
+    ),
+    h('div', { className: 'note' }, denied
+      ? 'Without access, Points Helper can’t check ' + store.name + '. You can allow it any time here.'
+      : 'Your browser asks once. Points Helper only reads ' + siteName(store) + ' pages, and sends nothing anywhere.'),
+    h('button', { className: 'btn primary', textContent: 'Allow and activate', onclick: () => allow(true) }),
+    h('button', { className: 'link', style: 'display:block;margin:8px auto 0', textContent: 'Just allow access', onclick: () => allow(false) })
   ));
 }
 
@@ -228,7 +294,18 @@ function buildMenu() {
   const menu = document.getElementById('menu');
   menu.replaceChildren(
     h('div', { className: 'label' }, 'Aeroplan eStore pages'),
-    ...Object.values(STORES).map(s => h('a', { href: s.estoreUrl, target: '_blank', textContent: s.name })),
+    // Going to an optional store's eStore page without access would miss the landing, so ask first.
+    ...Object.values(STORES).map(s => h('a', {
+      href: s.estoreUrl, target: '_blank', textContent: s.name,
+      onclick: e => {
+        if (!s.optional || allowed.has(s.key)) return;
+        e.preventDefault();
+        requestAccess(s, { activate: true }).then(ok => {
+          if (ok) window.close();
+          else chrome.tabs.create({ url: s.estoreUrl });
+        });
+      }
+    })),
     h('hr'),
     currentStore ? h('button', {
       textContent: 'Reset ' + currentStore.name + ' activation',
@@ -299,5 +376,8 @@ document.getElementById('feedback').addEventListener('click', async () => {
   }
 });
 
-showCurrent();
+(async () => {
+  for (const s of optionalStores()) if (await hasAccess(s)) allowed.add(s.key);
+  showCurrent();
+})();
 showOrders();

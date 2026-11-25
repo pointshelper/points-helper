@@ -45,7 +45,7 @@ async function cookieState(store, tabId) {
   // Partnerize-style: the cookie holds a click reference; ours is the one seen on the eStore landing.
   if (store.clickRefCookie) {
     const rec = (await getAll('track', {}))[store.key] || {};
-    // The same cookie can exist on both the store's domain and its www subdomain (an old click and the new one), so any match counts.
+    // The same cookie can exist on both uniqlo.com and www.uniqlo.com (an old click and the new one), so any match counts.
     const refs = cookies.filter(c => c.name === store.clickRefCookie).map(c => safeDecode(c.value));
     if (refs.length && rec.clickRef) result.state = refs.includes(rec.clickRef) ? 'active' : 'replaced';
   }
@@ -54,7 +54,7 @@ async function cookieState(store, tabId) {
     if (c) {
       const v = safeDecode(c.value);
       if (v.includes(store.trackingCookie.ours)) result.state = 'active';
-      else if (/rakuten|affiliate|siteid/i.test(v)) result.state = 'replaced';
+      else if ((store.trackingCookie.other || /rakuten|affiliate|siteid/i).test(v)) result.state = 'replaced';
     }
   }
   return result;
@@ -110,12 +110,20 @@ const TITLES = {
 const ICON_ON = { 16: 'icons/icon16.png', 32: 'icons/icon32.png' };
 const ICON_OFF = { 16: 'icons/icon16-off.png', 32: 'icons/icon32-off.png' };
 
+// Tabs this extension painted green. A tab's own icon outranks the browser's dot (syncNudgeRules),
+// so grey is only painted back over our own green, never on every other site.
+const greenTabs = new Set();
+chrome.tabs.onRemoved.addListener(tabId => greenTabs.delete(tabId));
+
 async function paintBadge(tabId, store) {
-  // setIcon logs "Unchecked runtime.lastError" for a closed tab unless the error is read in a callback.
-  await new Promise(resolve => chrome.action.setIcon({ tabId, path: store ? ICON_ON : ICON_OFF }, () => {
-    void chrome.runtime.lastError;
-    resolve();
-  }));
+  if (store || greenTabs.has(tabId)) {
+    // setIcon logs "Unchecked runtime.lastError" for a closed tab unless the error is read in a callback.
+    await new Promise(resolve => chrome.action.setIcon({ tabId, path: store ? ICON_ON : ICON_OFF }, () => {
+      void chrome.runtime.lastError;
+      resolve();
+    }));
+    if (store) greenTabs.add(tabId); else greenTabs.delete(tabId);
+  }
   if (!store) {
     await chrome.action.setBadgeText({ tabId, text: '' });
     await chrome.action.setTitle({ tabId, title: 'Points Helper' });
@@ -144,12 +152,122 @@ async function updateBadge(tabId, store) {
 
 chrome.tabs.onRemoved.addListener(tabId => tabIssues.delete(tabId));
 
+// ---- optional stores (POI-36): site access you allow on first use -----------
+
+// Run the page script on an optional store's pages only while you've allowed its site.
+async function syncStoreScripts() {
+  try {
+    const ids = new Set((await chrome.scripting.getRegisteredContentScripts()).map(r => r.id));
+    for (const s of optionalStores()) {
+      const id = 'store-' + s.key;
+      const ok = await hasAccess(s);
+      if (ok && !ids.has(id)) {
+        await chrome.scripting.registerContentScripts([{
+          id, matches: s.matches, js: ['stores.js', 'content.js'], runAt: 'document_idle', persistAcrossSessions: true
+        }]);
+      } else if (!ok && ids.has(id)) {
+        await chrome.scripting.unregisterContentScripts({ ids: [id] });
+      }
+    }
+  } catch (e) { /* tried again on the next start or permission change */ }
+}
+
+// Pages already open when you allowed access don't have the script yet: start it there.
+async function startInOpenTabs(store) {
+  const tabs = await chrome.tabs.query({ url: store.matches }).catch(() => []);
+  for (const tab of tabs) {
+    try {
+      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => !!window.__pointsHelperLoaded });
+      if (!r || !r.result) await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['stores.js', 'content.js'] });
+      updateBadge(tab.id, store);
+    } catch (e) { /* tab closed or not a page we can reach */ }
+  }
+}
+
+async function startActivation(store, returnTo, openerTabId) {
+  await chrome.storage.local.set({ returnTo: { store: store.key, url: cleanReturnUrl(store, returnTo), at: Date.now() } });
+  const opener = openerTabId != null ? await chrome.tabs.get(openerTabId).catch(() => null)
+    : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  await chrome.tabs.create({ url: store.estoreUrl, index: opener ? opener.index + 1 : undefined });
+}
+
+// The grey icon with an amber dot: "click me here to allow this store".
+async function dotIcon() {
+  const out = {};
+  for (const size of [16, 32]) {
+    const blob = await (await fetch(chrome.runtime.getURL('icons/icon' + size + '-off.png'))).blob();
+    const bmp = await createImageBitmap(blob);
+    const c = new OffscreenCanvas(size, size);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(bmp, 0, 0, size, size);
+    const r = size * 0.22;
+    const x = size - r - size * 0.04;
+    const y = size - r - size * 0.04;
+    ctx.beginPath();
+    ctx.arc(x, y, r + size * 0.06, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#F59E0B';
+    ctx.fill();
+    out[size] = ctx.getImageData(0, 0, size, size);
+  }
+  return out;
+}
+
+// Without site access the extension can't see a store's pages, but the browser can still
+// swap the toolbar icon there (declarativeContent reads nothing and sends nothing back).
+async function syncNudgeRules() {
+  try {
+    const waiting = [];
+    for (const s of optionalStores()) if (!(await hasAccess(s))) waiting.push(s);
+    await new Promise(r => chrome.declarativeContent.onPageChanged.removeRules(undefined, r));
+    if (!waiting.length) return;
+    const imageData = await dotIcon();
+    chrome.declarativeContent.onPageChanged.addRules([{
+      conditions: waiting.map(s => new chrome.declarativeContent.PageStateMatcher({
+        pageUrl: { hostSuffix: s.host, schemes: ['https'] }
+      })),
+      actions: [new chrome.declarativeContent.SetIcon({ imageData })]
+    }]);
+  } catch (e) { /* tried again on the next start or permission change */ }
+}
+
+async function syncOptionalStores() {
+  await syncStoreScripts();
+  await syncNudgeRules();
+}
+
+// After an update or reload, open store tabs need a refresh to get the new page script
+// (same as Amazon and Walmart). Restarting it in place could collide with the old one.
+chrome.runtime.onInstalled.addListener(syncOptionalStores);
+chrome.runtime.onStartup.addListener(syncOptionalStores);
+chrome.permissions.onRemoved.addListener(syncOptionalStores);
+
+// Chrome's prompt can close the popup before it hears the answer, so what the popup
+// wanted next ("Allow and activate") is saved first and finished here.
+chrome.permissions.onAdded.addListener(async added => {
+  await syncOptionalStores();
+  const origins = added.origins || [];
+  const intent = (await chrome.storage.session.get('afterGrant')).afterGrant;
+  await chrome.storage.session.remove('afterGrant');
+  for (const s of optionalStores()) {
+    if (!s.origins.some(o => origins.includes(o))) continue;
+    await startInOpenTabs(s);
+    if (intent && intent.store === s.key && intent.activate && Date.now() - intent.at < 5 * 60 * 1000) {
+      await startActivation(s, intent.returnTo, intent.tabId);
+    }
+  }
+});
+
 // ---- watch tabs: record activations, replacements, send user back ---------
 
 // The page you activated from may have come from an ad or another affiliate link, and its URL still
 // carries that tag. Going back to it unchanged would replace the eStore's tracking, so drop those params.
 const TRACKING_PARAMS = ['linkCode', 'linkId', 'camp', 'creative', 'ascsubtag', 'ref', 'ref_',
-  'gclid', 'gbraid', 'wbraid', 'gad_source', 'fbclid', 'msclkid', 'irclickid', 'clickref', 'hydadcr', 'mcid'];
+  'gclid', 'gbraid', 'wbraid', 'gad_source', 'fbclid', 'msclkid', 'irclickid', 'clickref', 'hydadcr', 'mcid',
+  'irgwc', 'afsrc', 'acmp', 'cmp'];
 function cleanReturnUrl(store, href) {
   if (!href) return null;
   let url;
@@ -196,7 +314,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   }
   let url;
   try { url = new URL(urlStr); } catch (e) { return; }
-  const store = storeForHost(url.hostname);
+  let store = storeForHost(url.hostname);
+  // A store whose site you haven't allowed: nothing to read there yet.
+  if (store && !(await hasAccess(store))) store = null;
 
   // A new page: forget the old page's problems until its script reports again.
   if (info.url) tabIssues.delete(tabId);
@@ -225,7 +345,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (!tab || !tab.url) return updateBadge(tabId, null);
-  try { updateBadge(tabId, storeForHost(new URL(tab.url).hostname)); } catch (e) { /* not a web page */ }
+  let store = null;
+  try { store = storeForHost(new URL(tab.url).hostname); } catch (e) { /* not a web page */ }
+  if (store && !(await hasAccess(store))) store = null;
+  updateBadge(tabId, store);
 });
 
 // ---- messages from content script and popup --------------------------------
@@ -239,9 +362,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse(await computeStatus(store, sender.tab ? sender.tab.id : msg.tabId));
       if (sender.tab) updateBadge(sender.tab.id, store);
     } else if (msg.type === 'activate' && store) {
-      await chrome.storage.local.set({ returnTo: { store: store.key, url: cleanReturnUrl(store, msg.returnTo), at: Date.now() } });
-      const opener = sender.tab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-      await chrome.tabs.create({ url: store.estoreUrl, index: opener ? opener.index + 1 : undefined });
+      await startActivation(store, msg.returnTo, sender.tab ? sender.tab.id : null);
       sendResponse({ ok: true });
     } else if (msg.type === 'order' && store) {
       const orders = await getAll('orders', []);
@@ -266,6 +387,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ orders: orders.slice(0, 200) });
       }
       sendResponse({ ok: true });
+    } else if (msg.type === 'orderNumber' && store && msg.orderNumber) {
+      // From the store's order details page: give the number to the latest order logged
+      // without one in the last day. Viewing older orders never logs anything new.
+      const orders = await getAll('orders', []);
+      const known = orders.some(o => o.store === store.key && o.orderNumber === msg.orderNumber);
+      const o = !known && orders.find(x => x.store === store.key && !x.orderNumber &&
+        Date.now() - x.at < 24 * 60 * 60 * 1000);
+      if (o) {
+        o.orderNumber = msg.orderNumber;
+        await chrome.storage.local.set({ orders });
+      }
+      sendResponse({ ok: !!o });
     } else if (msg.type === 'orders') {
       sendResponse(await getAll('orders', []));
     } else if (msg.type === 'markArrived') {
